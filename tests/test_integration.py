@@ -32,8 +32,8 @@ def test_end_to_end_package_flow_runs_on_normalised_data(spark, base_params):
     )
     segment_attributes_df = spark.createDataFrame(
         [
-            ("nmi-1", "Residential", "EV"),
-            ("nmi-2", "Residential", "EV"),
+            ("nmi-1", "Residential", "No_DER"),
+            ("nmi-2", "Residential", "No_DER"),
         ],
         ["nmi", "segment", "der_type"],
     )

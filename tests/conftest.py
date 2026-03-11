@@ -54,13 +54,18 @@ def base_params():
         "parameters": {
             "eligible_resi_patterns": ["resi"],
             "smart_meter_code": "SM",
-            "eligible_der_type": "EV",
+            "eligible_der_groups": {
+                "No_DER": ["No_DER"],
+                "Solar": ["Solar"],
+                "Solar_Battery": ["Solar_Battery"],
+            },
             "window_start": "01:00",
             "window_end": "03:00",
             "cap_kwh_per_day": 5000.0,
-            "u_segment": {
-                "default": 1.0,
-                "Residential": 1.0,
+            "u_eligible_der_group": {
+                "No_DER": 1.0,
+                "Solar": 0.0,
+                "Solar_Battery": 0.0,
             },
             "ramp_start_fcy": 2025,
             "ramp_full_fcy": 2026,

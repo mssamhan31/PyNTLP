@@ -31,10 +31,46 @@ def _baseline_profiles_df(spark):
     )
 
 
-def _segment_metrics_df(spark, n_total, n_eligible, eligibility_rate):
+def _segment_metrics_df(
+    spark,
+    n_total,
+    n_eligible_no_der=0,
+    n_eligible_solar=0,
+    n_eligible_solar_battery=0,
+):
+    n_eligible = n_eligible_no_der + n_eligible_solar + n_eligible_solar_battery
+    eligibility_rate = n_eligible / n_total if n_total else 0.0
+    eligibility_rate_no_der = n_eligible_no_der / n_total if n_total else 0.0
+    eligibility_rate_solar = n_eligible_solar / n_total if n_total else 0.0
+    eligibility_rate_solar_battery = n_eligible_solar_battery / n_total if n_total else 0.0
+
     return spark.createDataFrame(
-        [("Residential", n_total, n_eligible, eligibility_rate)],
-        ["segment", "n_total", "n_eligible", "eligibility_rate"],
+        [
+            (
+                "Residential",
+                n_total,
+                n_eligible,
+                eligibility_rate,
+                n_eligible_no_der,
+                n_eligible_solar,
+                n_eligible_solar_battery,
+                eligibility_rate_no_der,
+                eligibility_rate_solar,
+                eligibility_rate_solar_battery,
+            )
+        ],
+        [
+            "segment",
+            "n_total",
+            "n_eligible",
+            "eligibility_rate",
+            "n_eligible_no_der",
+            "n_eligible_solar",
+            "n_eligible_solar_battery",
+            "eligibility_rate_no_der",
+            "eligibility_rate_solar",
+            "eligibility_rate_solar_battery",
+        ],
     )
 
 
@@ -43,7 +79,7 @@ def test_compute_pma_sso_is_energy_neutral_with_flat_allocation(spark, base_para
 
     pma_delta_df = compute_pma_sso(
         baseline_profiles_df=_baseline_profiles_df(spark),
-        segment_metrics_df=_segment_metrics_df(spark, n_total=10, n_eligible=10, eligibility_rate=1.0),
+        segment_metrics_df=_segment_metrics_df(spark, n_total=10, n_eligible_no_der=10),
         params=params,
     )
 
@@ -71,7 +107,7 @@ def test_compute_pma_sso_respects_cap_binding(spark, base_params):
 
     pma_delta_df = compute_pma_sso(
         baseline_profiles_df=_baseline_profiles_df(spark),
-        segment_metrics_df=_segment_metrics_df(spark, n_total=1, n_eligible=1, eligibility_rate=1.0),
+        segment_metrics_df=_segment_metrics_df(spark, n_total=1, n_eligible_no_der=1),
         params=params,
     )
 
@@ -88,7 +124,7 @@ def test_compute_pma_sso_returns_zero_for_ineligible_segments(spark, base_params
 
     pma_delta_df = compute_pma_sso(
         baseline_profiles_df=_baseline_profiles_df(spark),
-        segment_metrics_df=_segment_metrics_df(spark, n_total=10, n_eligible=0, eligibility_rate=0.0),
+        segment_metrics_df=_segment_metrics_df(spark, n_total=10),
         params=params,
     )
 
@@ -96,3 +132,51 @@ def test_compute_pma_sso_returns_zero_for_ineligible_segments(spark, base_params
 
     assert all(isclose(delta, 0.0, rel_tol=0.0, abs_tol=1e-12) for delta in deltas)
 
+
+def test_compute_pma_sso_uses_weighted_cohort_uptake_caps(spark, base_params):
+    mixed_params = copy.deepcopy(base_params)
+    mixed_params["parameters"]["u_eligible_der_group"] = {
+        "No_DER": 1.0,
+        "Solar": 0.5,
+        "Solar_Battery": 0.25,
+    }
+    params = load_params(mixed_params)
+
+    pma_delta_df = compute_pma_sso(
+        baseline_profiles_df=_baseline_profiles_df(spark),
+        segment_metrics_df=_segment_metrics_df(
+            spark,
+            n_total=10,
+            n_eligible_no_der=2,
+            n_eligible_solar=2,
+            n_eligible_solar_battery=2,
+        ),
+        params=params,
+    )
+
+    deltas = {row["interval"]: row["pma_sso_mw"] for row in pma_delta_df.collect()}
+
+    assert isclose(deltas[1], -0.175, rel_tol=0.0, abs_tol=1e-12)
+    assert isclose(deltas[2], 0.175, rel_tol=0.0, abs_tol=1e-12)
+    assert isclose(deltas[3], 0.175, rel_tol=0.0, abs_tol=1e-12)
+    assert isclose(deltas[4], -0.175, rel_tol=0.0, abs_tol=1e-12)
+
+
+def test_compute_pma_sso_respects_explicit_donor_window(spark, base_params):
+    explicit_donor_params = copy.deepcopy(base_params)
+    explicit_donor_params["parameters"]["donor_window_start"] = "03:00"
+    explicit_donor_params["parameters"]["donor_window_end"] = "04:00"
+    params = load_params(explicit_donor_params)
+
+    pma_delta_df = compute_pma_sso(
+        baseline_profiles_df=_baseline_profiles_df(spark),
+        segment_metrics_df=_segment_metrics_df(spark, n_total=10, n_eligible_no_der=10),
+        params=params,
+    )
+
+    deltas = {row["interval"]: row["pma_sso_mw"] for row in pma_delta_df.collect()}
+
+    assert isclose(deltas[1], 0.0, rel_tol=0.0, abs_tol=1e-12)
+    assert isclose(deltas[2], 0.5, rel_tol=0.0, abs_tol=1e-12)
+    assert isclose(deltas[3], 0.5, rel_tol=0.0, abs_tol=1e-12)
+    assert isclose(deltas[4], -1.0, rel_tol=0.0, abs_tol=1e-12)

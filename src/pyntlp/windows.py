@@ -17,29 +17,37 @@ def get_window_intervals(params: dict) -> tuple[list[int], list[int], float]:
     intervals_per_day = int(constants["intervals_per_day"])
     interval_hours = interval_minutes / 60.0
 
-    window_start_minutes = _parse_clock_time(parameters["window_start"])
-    window_end_minutes = _parse_clock_time(parameters["window_end"])
-
-    if window_start_minutes % interval_minutes != 0:
-        raise ValueError("`window_start` must align to `interval_minutes`.")
-    if window_end_minutes % interval_minutes != 0:
-        raise ValueError("`window_end` must align to `interval_minutes`.")
-    if window_start_minutes == window_end_minutes:
-        raise ValueError("Window cannot be empty or cover the entire day.")
-
     all_intervals = list(range(1, intervals_per_day + 1))
-    window_set = {
-        interval_index
-        for interval_index in all_intervals
-        if _interval_start_in_window(
-            interval_index=interval_index,
-            interval_minutes=interval_minutes,
-            window_start_minutes=window_start_minutes,
-            window_end_minutes=window_end_minutes,
-        )
-    }
+
+    window_set = _build_interval_set(
+        interval_minutes=interval_minutes,
+        all_intervals=all_intervals,
+        window_start=parameters["window_start"],
+        window_end=parameters["window_end"],
+        window_label="window",
+        start_key="window_start",
+        end_key="window_end",
+    )
     window_intervals = [interval_index for interval_index in all_intervals if interval_index in window_set]
-    donor_intervals = [interval_index for interval_index in all_intervals if interval_index not in window_set]
+
+    donor_window_start = parameters.get("donor_window_start")
+    donor_window_end = parameters.get("donor_window_end")
+    if donor_window_start is None and donor_window_end is None:
+        donor_intervals = [interval_index for interval_index in all_intervals if interval_index not in window_set]
+    else:
+        donor_set = _build_interval_set(
+            interval_minutes=interval_minutes,
+            all_intervals=all_intervals,
+            window_start=donor_window_start,
+            window_end=donor_window_end,
+            window_label="donor window",
+            start_key="donor_window_start",
+            end_key="donor_window_end",
+        )
+        overlap = sorted(window_set & donor_set)
+        if overlap:
+            raise ValueError(f"Configured donor window overlaps the free window on intervals: {overlap}")
+        donor_intervals = [interval_index for interval_index in all_intervals if interval_index in donor_set]
 
     if not window_intervals:
         raise ValueError("Configured window produced no in-window intervals.")
@@ -71,3 +79,35 @@ def _interval_start_in_window(
 
     return interval_start_minutes >= window_start_minutes or interval_start_minutes < window_end_minutes
 
+
+def _build_interval_set(
+    interval_minutes: int,
+    all_intervals: list[int],
+    window_start: str,
+    window_end: str,
+    window_label: str,
+    start_key: str | None = None,
+    end_key: str | None = None,
+) -> set[int]:
+    window_start_minutes = _parse_clock_time(window_start)
+    window_end_minutes = _parse_clock_time(window_end)
+    start_key = start_key or f"{window_label}_start"
+    end_key = end_key or f"{window_label}_end"
+
+    if window_start_minutes % interval_minutes != 0:
+        raise ValueError(f"`{start_key}` must align to `interval_minutes`.")
+    if window_end_minutes % interval_minutes != 0:
+        raise ValueError(f"`{end_key}` must align to `interval_minutes`.")
+    if window_start_minutes == window_end_minutes:
+        raise ValueError(f"{window_label.capitalize()} cannot be empty or cover the entire day.")
+
+    return {
+        interval_index
+        for interval_index in all_intervals
+        if _interval_start_in_window(
+            interval_index=interval_index,
+            interval_minutes=interval_minutes,
+            window_start_minutes=window_start_minutes,
+            window_end_minutes=window_end_minutes,
+        )
+    }

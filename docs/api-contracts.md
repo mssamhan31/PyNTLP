@@ -52,11 +52,11 @@ Required keys:
 
 - `eligible_resi_patterns`
 - `smart_meter_code`
-- `eligible_der_type`
+- `eligible_der_groups`
 - `window_start`
 - `window_end`
 - `cap_kwh_per_day`
-- `u_segment`
+- `u_eligible_der_group`
 - `ramp_start_fcy`
 - `ramp_full_fcy`
 - `s_segment`
@@ -65,23 +65,55 @@ Required keys:
 - `donor_shape`
 - `energy_accounting`
 
+Optional donor-window keys:
+
+- `donor_window_start`
+- `donor_window_end`
+
 Current v0.1 supported values:
 
 - `window_shape: flat`
 - `donor_shape: flat`
 - `energy_accounting: energy_neutral`
 
-Segment mappings are flat mappings, for example:
+`eligible_der_groups` is a required three-entry mapping from canonical cohort to raw source values:
 
 ```yaml
-u_segment:
-  default: 0.25
-  Residential: 0.35
+eligible_der_groups:
+  No_DER: ["No_DER"]
+  Solar: ["Solar"]
+  Solar_Battery: ["Solar_Battery"]
+```
 
+Rules:
+
+- the required cohort keys are exactly `No_DER`, `Solar`, and `Solar_Battery`
+- raw source values are matched case-insensitively after trimming
+- the same raw source value cannot appear in more than one cohort
+
+`u_eligible_der_group` is a required three-entry mapping:
+
+```yaml
+u_eligible_der_group:
+  No_DER: 0.25
+  Solar: 0.05
+  Solar_Battery: 0.10
+```
+
+`s_segment` remains a flat mapping with a required default:
+
+```yaml
 s_segment:
   default: 0.10
   Residential: 0.15
 ```
+
+Donor-window rules:
+
+- if `donor_window_start` and `donor_window_end` are omitted, donor intervals default to the complement of the free window
+- if one donor-window key is supplied without the other, param loading fails
+- explicit donor windows must not overlap the free window
+- explicit donor windows use the same start-inclusive, end-exclusive, interval-alignment, and overnight rules as the free window
 
 ## Input DataFrames
 
@@ -139,6 +171,18 @@ Join rule:
 - `n_total`
 - `n_eligible`
 - `eligibility_rate`
+- `n_eligible_no_der`
+- `n_eligible_solar`
+- `n_eligible_solar_battery`
+- `eligibility_rate_no_der`
+- `eligibility_rate_solar`
+- `eligibility_rate_solar_battery`
+
+Interpretation:
+
+- `n_eligible` is the sum of the three cohort-specific counts
+- all cohort-specific counts still require residential-segment matching and a smart meter
+- one NMI cannot contribute to more than one DER cohort
 
 ## PMA Output
 
@@ -191,4 +235,3 @@ Current checks:
 - required output columns present
 - null checks on required output columns
 - group-level energy neutrality
-

@@ -14,6 +14,12 @@ from .schema import (
 from .utils import ensure_required_columns, segment_parameter_expr
 from .windows import get_window_intervals
 
+DER_GROUP_RATE_COLUMNS = {
+    "No_DER": "eligibility_rate_no_der",
+    "Solar": "eligibility_rate_solar",
+    "Solar_Battery": "eligibility_rate_solar_battery",
+}
+
 
 def compute_pma_sso(
     baseline_profiles_df: DataFrame,
@@ -30,7 +36,7 @@ def compute_pma_sso(
 
     k_response = float(parameters["k_response"])
     cap_kwh_per_day = float(parameters["cap_kwh_per_day"])
-    u_segment = parameters["u_segment"]
+    u_eligible_der_group = parameters["u_eligible_der_group"]
     s_segment = parameters["s_segment"]
 
     baseline = baseline_profiles_df.select(
@@ -54,16 +60,36 @@ def compute_pma_sso(
             F.col("n_total").cast("int").alias("n_total"),
             F.col("n_eligible").cast("int").alias("n_eligible"),
             F.col("eligibility_rate").cast("double").alias("eligibility_rate"),
+            F.col("n_eligible_no_der").cast("int").alias("n_eligible_no_der"),
+            F.col("n_eligible_solar").cast("int").alias("n_eligible_solar"),
+            F.col("n_eligible_solar_battery").cast("int").alias("n_eligible_solar_battery"),
+            F.col("eligibility_rate_no_der").cast("double").alias("eligibility_rate_no_der"),
+            F.col("eligibility_rate_solar").cast("double").alias("eligibility_rate_solar"),
+            F.col("eligibility_rate_solar_battery").cast("double").alias("eligibility_rate_solar_battery"),
         )
         .dropDuplicates(["segment"])
     )
 
+    eligible_uptake_rate_expr = F.lit(0.0)
+    for group_name, rate_column in DER_GROUP_RATE_COLUMNS.items():
+        eligible_uptake_rate_expr = eligible_uptake_rate_expr + (
+            F.col(rate_column) * F.lit(float(u_eligible_der_group[group_name]))
+        )
+
     enriched = (
         baseline.join(segment_metrics, on="segment", how="left")
-        .fillna({"n_total": 0, "n_eligible": 0, "eligibility_rate": 0.0})
-        .withColumn(
-            "u_value",
-            segment_parameter_expr(F.col("segment"), u_segment, float(u_segment["default"])).cast("double"),
+        .fillna(
+            {
+                "n_total": 0,
+                "n_eligible": 0,
+                "eligibility_rate": 0.0,
+                "n_eligible_no_der": 0,
+                "n_eligible_solar": 0,
+                "n_eligible_solar_battery": 0,
+                "eligibility_rate_no_der": 0.0,
+                "eligibility_rate_solar": 0.0,
+                "eligibility_rate_solar_battery": 0.0,
+            }
         )
         .withColumn(
             "s_value",
@@ -78,8 +104,12 @@ def compute_pma_sso(
             ),
         )
         .withColumn(
+            "eligible_uptake_rate",
+            eligible_uptake_rate_expr.cast("double"),
+        )
+        .withColumn(
             "adoption_rate",
-            (F.col("eligibility_rate") * F.col("u_value") * F.col("ramp_rate")).cast("double"),
+            (F.col("eligible_uptake_rate") * F.col("ramp_rate")).cast("double"),
         )
     )
 
@@ -178,4 +208,3 @@ def _linear_ramp_expr(fcy_column: Column, ramp_start_fcy: int, ramp_full_fcy: in
             ).cast("double")
         )
     )
-

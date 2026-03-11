@@ -16,21 +16,32 @@ parameters:
   # Exact smart meter code used to identify eligibility.
   smart_meter_code: "SMART"
 
-  # Exact DER type used to identify eligibility.
-  eligible_der_type: "EV"
+  # Canonical eligibility cohorts mapped to raw source DER values.
+  eligible_der_groups:
+    No_DER:
+      - "No_DER"
+    Solar:
+      - "Solar"
+    Solar_Battery:
+      - "Solar_Battery"
 
   # Policy window is start-inclusive and end-exclusive.
   # Values must align to interval_minutes.
   window_start: "10:00"
   window_end: "15:00"
 
+  # Optional donor window. When omitted, all intervals outside the free window are donors.
+  donor_window_start: "16:00"
+  donor_window_end: "20:00"
+
   # Daily energy cap per participant in kWh.
   cap_kwh_per_day: 4.0
 
-  # Uptake ceiling by segment. `default` is required.
-  u_segment:
-    default: 0.20
-    Residential: 0.35
+  # Uptake ceiling by eligible DER cohort.
+  u_eligible_der_group:
+    No_DER: 0.25
+    Solar: 0.05
+    Solar_Battery: 0.10
 
   # Linear adoption ramp across FCY.
   ramp_start_fcy: 2026

@@ -8,6 +8,8 @@ from typing import Any
 
 import yaml
 
+ELIGIBLE_DER_GROUP_KEYS = ("No_DER", "Solar", "Solar_Battery")
+
 SUPPORTED_WINDOW_SHAPES = {"flat"}
 SUPPORTED_DONOR_SHAPES = {"flat"}
 SUPPORTED_ENERGY_ACCOUNTING = {"energy_neutral"}
@@ -25,11 +27,11 @@ REQUIRED_CONSTANT_KEYS = {
 REQUIRED_PARAMETER_KEYS = {
     "eligible_resi_patterns",
     "smart_meter_code",
-    "eligible_der_type",
+    "eligible_der_groups",
     "window_start",
     "window_end",
     "cap_kwh_per_day",
-    "u_segment",
+    "u_eligible_der_group",
     "ramp_start_fcy",
     "ramp_full_fcy",
     "s_segment",
@@ -119,14 +121,24 @@ def _validate_parameters(raw_parameters: Any) -> dict[str, Any]:
     if ramp_full_fcy < ramp_start_fcy:
         raise ValueError("`ramp_full_fcy` must be greater than or equal to `ramp_start_fcy`.")
 
+    donor_window_start, donor_window_end = _validate_optional_donor_window(raw_parameters)
+
     return {
         "eligible_resi_patterns": _require_str_list(raw_parameters, "eligible_resi_patterns"),
         "smart_meter_code": _require_str(raw_parameters, "smart_meter_code"),
-        "eligible_der_type": _require_str(raw_parameters, "eligible_der_type"),
+        "eligible_der_groups": _require_eligible_der_groups(raw_parameters, "eligible_der_groups"),
         "window_start": _require_time(raw_parameters, "window_start"),
         "window_end": _require_time(raw_parameters, "window_end"),
+        "donor_window_start": donor_window_start,
+        "donor_window_end": donor_window_end,
         "cap_kwh_per_day": _require_float(raw_parameters, "cap_kwh_per_day", minimum=0.0),
-        "u_segment": _require_float_mapping(raw_parameters, "u_segment", require_default=True, minimum=0.0, maximum=1.0),
+        "u_eligible_der_group": _require_exact_float_mapping(
+            raw_parameters,
+            "u_eligible_der_group",
+            required_keys=ELIGIBLE_DER_GROUP_KEYS,
+            minimum=0.0,
+            maximum=1.0,
+        ),
         "ramp_start_fcy": ramp_start_fcy,
         "ramp_full_fcy": ramp_full_fcy,
         "s_segment": _require_float_mapping(raw_parameters, "s_segment", require_default=True, minimum=0.0, maximum=1.0),
@@ -209,6 +221,18 @@ def _require_time(container: dict[str, Any], key: str) -> str:
     return value
 
 
+def _optional_time(container: dict[str, Any], key: str) -> str | None:
+    value = container.get(key)
+    if value is None:
+        return None
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"`{key}` must be a non-empty string when supplied.")
+    stripped = value.strip()
+    if not TIME_PATTERN.match(stripped):
+        raise ValueError(f"`{key}` must use HH:MM 24-hour format.")
+    return stripped
+
+
 def _require_choice(container: dict[str, Any], key: str, supported_values: set[str]) -> str:
     value = _require_str(container, key).lower()
     if value not in supported_values:
@@ -244,6 +268,84 @@ def _require_float_mapping(
     return normalised_mapping
 
 
+def _require_exact_float_mapping(
+    container: dict[str, Any],
+    key: str,
+    required_keys: tuple[str, ...],
+    minimum: float | None = None,
+    maximum: float | None = None,
+) -> dict[str, float]:
+    mapping = container.get(key)
+    if not isinstance(mapping, dict) or not mapping:
+        raise ValueError(f"`{key}` must be a non-empty mapping.")
+
+    missing_keys = sorted(set(required_keys) - set(mapping))
+    extra_keys = sorted(set(mapping) - set(required_keys))
+    if missing_keys or extra_keys:
+        raise ValueError(f"`{key}` must contain exactly {list(required_keys)}. missing={missing_keys}; extra={extra_keys}")
+
+    normalised_mapping: dict[str, float] = {}
+    for item_key in required_keys:
+        numeric_value = _optional_float(
+            mapping[item_key],
+            minimum=minimum,
+            maximum=maximum,
+            key=f"{key}.{item_key}",
+        )
+        normalised_mapping[item_key] = float(numeric_value)
+
+    return normalised_mapping
+
+
+def _require_eligible_der_groups(container: dict[str, Any], key: str) -> dict[str, list[str]]:
+    mapping = container.get(key)
+    if not isinstance(mapping, dict) or not mapping:
+        raise ValueError(f"`{key}` must be a non-empty mapping.")
+
+    missing_keys = sorted(set(ELIGIBLE_DER_GROUP_KEYS) - set(mapping))
+    extra_keys = sorted(set(mapping) - set(ELIGIBLE_DER_GROUP_KEYS))
+    if missing_keys or extra_keys:
+        raise ValueError(
+            f"`{key}` must contain exactly {list(ELIGIBLE_DER_GROUP_KEYS)}. missing={missing_keys}; extra={extra_keys}"
+        )
+
+    cleaned_mapping: dict[str, list[str]] = {}
+    raw_value_to_group: dict[str, str] = {}
+
+    for group_name in ELIGIBLE_DER_GROUP_KEYS:
+        cleaned_values: list[str] = []
+        raw_values = mapping[group_name]
+        if not isinstance(raw_values, list) or not raw_values:
+            raise ValueError(f"`{key}.{group_name}` must be a non-empty list of strings.")
+
+        for raw_value in raw_values:
+            if not isinstance(raw_value, str) or not raw_value.strip():
+                raise ValueError(f"`{key}.{group_name}` must contain only non-empty strings.")
+            cleaned_value = raw_value.strip()
+            normalised_value = cleaned_value.upper()
+            previous_group = raw_value_to_group.get(normalised_value)
+            if previous_group is not None and previous_group != group_name:
+                raise ValueError(
+                    f"`{key}` maps raw DER value `{cleaned_value}` to both `{previous_group}` and `{group_name}`."
+                )
+            raw_value_to_group[normalised_value] = group_name
+            cleaned_values.append(cleaned_value)
+
+        cleaned_mapping[group_name] = cleaned_values
+
+    return cleaned_mapping
+
+
+def _validate_optional_donor_window(container: dict[str, Any]) -> tuple[str | None, str | None]:
+    donor_window_start = _optional_time(container, "donor_window_start")
+    donor_window_end = _optional_time(container, "donor_window_end")
+
+    if (donor_window_start is None) != (donor_window_end is None):
+        raise ValueError("`donor_window_start` and `donor_window_end` must be supplied together.")
+
+    return donor_window_start, donor_window_end
+
+
 def _optional_float_mapping(value: Any) -> dict[str, float]:
     if value is None:
         return {}
@@ -260,4 +362,3 @@ def _optional_float_mapping(value: Any) -> dict[str, float]:
         )
         normalised_mapping[item_key.strip()] = float(numeric_value)
     return normalised_mapping
-

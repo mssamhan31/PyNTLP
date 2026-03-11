@@ -16,7 +16,10 @@ The package boundary is deliberate:
 The tool objective is to take:
 
 - normalised Spark DataFrames for baseline profiles, segment attributes, and smart-meter eligibility
-- a YAML parameter set with `constants` and `parameters`
+- a YAML parameter set with `constants` and `parameters`, including:
+  - a free window
+  - an optional explicit donor window
+  - DER eligibility cohorts for `No_DER`, `Solar`, and `Solar_Battery`
 
 and return:
 
