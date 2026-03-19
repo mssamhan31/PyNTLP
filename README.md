@@ -1,6 +1,6 @@
 # pyntlp
 
-`pyntlp` is a public Spark-native Python package for converting an SSO policy definition into an additive interval PMA delta profile, `pma_sso_mw`.
+`pyntlp` is a public Spark-native Python package for converting an SSO policy definition into additive interval PMA outputs: `pma_sso_mw` and `pma_sso_pct_of_underlying`.
 
 ## Context
 
@@ -25,6 +25,7 @@ and return:
 
 - a deterministic Spark DataFrame with one row per baseline input row
 - an additive interval delta column, `pma_sso_mw`
+- a derived interval percentage column, `pma_sso_pct_of_underlying`
 - a validation report for schema and energy-neutrality checks
 
 Runtime targets:

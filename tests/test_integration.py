@@ -63,5 +63,6 @@ def test_end_to_end_package_flow_runs_on_normalised_data(spark, base_params):
         "day_type",
         "interval",
         "pma_sso_mw",
+        "pma_sso_pct_of_underlying",
     ]
     assert {row["status"] for row in validation_report_df.collect()} == {"PASS"}

@@ -5,7 +5,13 @@ from __future__ import annotations
 from pyspark.sql import DataFrame
 from pyspark.sql import functions as F
 
-from .schema import GROUP_COLUMNS, OUTPUT_COLUMNS, OUTPUT_SCHEMA_SIGNATURE, VALIDATION_REPORT_SCHEMA
+from .schema import (
+    GROUP_COLUMNS,
+    OUTPUT_COLUMNS,
+    OUTPUT_NON_NULL_COLUMNS,
+    OUTPUT_SCHEMA_SIGNATURE,
+    VALIDATION_REPORT_SCHEMA,
+)
 from .windows import get_window_intervals
 
 
@@ -38,37 +44,43 @@ def validate_pma(pma_delta_df: DataFrame, params: dict) -> DataFrame:
         )
     )
 
-    if missing_columns:
+    missing_non_null_columns = sorted(set(OUTPUT_NON_NULL_COLUMNS) - set(pma_delta_df.columns))
+    if missing_non_null_columns:
         report_rows.append(
             (
                 "required_columns_non_null",
                 "FAIL",
-                "Cannot evaluate null checks because required output columns are missing.",
+                "Cannot evaluate null checks because required non-null output columns are missing: "
+                f"{missing_non_null_columns}",
             )
         )
+    else:
+        null_aggregations = [
+            F.sum(F.when(F.col(column_name).isNull(), F.lit(1)).otherwise(F.lit(0))).alias(column_name)
+            for column_name in OUTPUT_NON_NULL_COLUMNS
+        ]
+        raw_null_counts = pma_delta_df.select(*null_aggregations).first().asDict()
+        null_counts = {key: int(value or 0) for key, value in raw_null_counts.items()}
+        total_nulls = int(sum(null_counts.values()))
+        report_rows.append(
+            (
+                "required_columns_non_null",
+                "PASS" if total_nulls == 0 else "FAIL",
+                f"total_nulls={total_nulls}; per_column={null_counts}",
+            )
+        )
+
+    missing_energy_columns = sorted(set(GROUP_COLUMNS + ["pma_sso_mw"]) - set(pma_delta_df.columns))
+    if missing_energy_columns:
         report_rows.append(
             (
                 "group_energy_neutrality",
                 "FAIL",
-                "Cannot evaluate neutrality because required output columns are missing.",
+                "Cannot evaluate neutrality because required columns are missing: "
+                f"{missing_energy_columns}",
             )
         )
         return spark.createDataFrame(report_rows, schema=VALIDATION_REPORT_SCHEMA)
-
-    null_aggregations = [
-        F.sum(F.when(F.col(column_name).isNull(), F.lit(1)).otherwise(F.lit(0))).alias(column_name)
-        for column_name in OUTPUT_COLUMNS
-    ]
-    raw_null_counts = pma_delta_df.select(*null_aggregations).first().asDict()
-    null_counts = {key: int(value or 0) for key, value in raw_null_counts.items()}
-    total_nulls = int(sum(null_counts.values()))
-    report_rows.append(
-        (
-            "required_columns_non_null",
-            "PASS" if total_nulls == 0 else "FAIL",
-            f"total_nulls={total_nulls}; per_column={null_counts}",
-        )
-    )
 
     interval_hours = get_window_intervals(params)[2]
     energy_error_df = pma_delta_df.groupBy(*GROUP_COLUMNS).agg(

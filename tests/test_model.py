@@ -7,12 +7,16 @@ from pyntlp import compute_pma_sso, load_params, validate_pma
 
 
 def _baseline_profiles_df(spark):
+    return _baseline_profiles_df_with_values(spark, [1.0, 1.0, 1.0, 1.0])
+
+
+def _baseline_profiles_df_with_values(spark, underlying_values):
     return spark.createDataFrame(
         [
-            (2026, "v1", 1001, "Residential", 2026, "base", "POE50", "weekday", "summer", "business", 1, 1.0),
-            (2026, "v1", 1001, "Residential", 2026, "base", "POE50", "weekday", "summer", "business", 2, 1.0),
-            (2026, "v1", 1001, "Residential", 2026, "base", "POE50", "weekday", "summer", "business", 3, 1.0),
-            (2026, "v1", 1001, "Residential", 2026, "base", "POE50", "weekday", "summer", "business", 4, 1.0),
+            (2026, "v1", 1001, "Residential", 2026, "base", "POE50", "weekday", "summer", "business", 1, underlying_values[0]),
+            (2026, "v1", 1001, "Residential", 2026, "base", "POE50", "weekday", "summer", "business", 2, underlying_values[1]),
+            (2026, "v1", 1001, "Residential", 2026, "base", "POE50", "weekday", "summer", "business", 3, underlying_values[2]),
+            (2026, "v1", 1001, "Residential", 2026, "base", "POE50", "weekday", "summer", "business", 4, underlying_values[3]),
         ],
         [
             "fc_run_year",
@@ -95,6 +99,48 @@ def test_compute_pma_sso_is_energy_neutral_with_flat_allocation(spark, base_para
         row["check_name"]: row["status"] for row in validate_pma(pma_delta_df, params).collect()
     }
     assert validation_status["output_schema_exact"] == "PASS"
+    assert validation_status["group_energy_neutrality"] == "PASS"
+
+
+def test_compute_pma_sso_outputs_pct_of_underlying_in_percent_units(spark, base_params):
+    params = load_params(copy.deepcopy(base_params))
+
+    pma_delta_df = compute_pma_sso(
+        baseline_profiles_df=_baseline_profiles_df(spark),
+        segment_metrics_df=_segment_metrics_df(spark, n_total=10, n_eligible_no_der=10),
+        params=params,
+    )
+
+    pct_by_interval = {
+        row["interval"]: row["pma_sso_pct_of_underlying"] for row in pma_delta_df.collect()
+    }
+
+    assert isclose(pct_by_interval[1], -50.0, rel_tol=0.0, abs_tol=1e-12)
+    assert isclose(pct_by_interval[2], 50.0, rel_tol=0.0, abs_tol=1e-12)
+    assert isclose(pct_by_interval[3], 50.0, rel_tol=0.0, abs_tol=1e-12)
+    assert isclose(pct_by_interval[4], -50.0, rel_tol=0.0, abs_tol=1e-12)
+
+
+def test_compute_pma_sso_allows_null_pct_when_underlying_demand_is_zero(spark, base_params):
+    params = load_params(copy.deepcopy(base_params))
+
+    pma_delta_df = compute_pma_sso(
+        baseline_profiles_df=_baseline_profiles_df_with_values(spark, [0.0, 1.0, 1.0, 1.0]),
+        segment_metrics_df=_segment_metrics_df(spark, n_total=10, n_eligible_no_der=10),
+        params=params,
+    )
+
+    rows_by_interval = {row["interval"]: row.asDict() for row in pma_delta_df.collect()}
+
+    assert rows_by_interval[1]["pma_sso_mw"] < 0.0
+    assert rows_by_interval[1]["pma_sso_pct_of_underlying"] is None
+    assert rows_by_interval[2]["pma_sso_pct_of_underlying"] > 0.0
+
+    validation_status = {
+        row["check_name"]: row["status"] for row in validate_pma(pma_delta_df, params).collect()
+    }
+    assert validation_status["output_schema_exact"] == "PASS"
+    assert validation_status["required_columns_non_null"] == "PASS"
     assert validation_status["group_energy_neutrality"] == "PASS"
 
 

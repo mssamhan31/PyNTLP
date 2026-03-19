@@ -4,7 +4,7 @@ This page describes how the v0.1 `pyntlp` model works.
 
 ## Scope
 
-The model converts an SSO policy definition into an additive interval PMA delta profile named `pma_sso_mw`.
+The model converts an SSO policy definition into additive interval PMA outputs named `pma_sso_mw` and `pma_sso_pct_of_underlying`.
 
 The model does not:
 
@@ -102,6 +102,11 @@ Donor-window convention:
 - donor windows must not overlap the free window
 
 The model converts allocated interval energy into MW by dividing by `interval_hours`.
+
+It also derives an interval percentage output:
+
+- `pma_sso_pct_of_underlying = 100 * pma_sso_mw / underlying_demand_mw`
+- when `underlying_demand_mw` is zero, the percentage output is `null`
 
 ## Step 6: Energy Neutrality
 

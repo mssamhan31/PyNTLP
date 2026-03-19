@@ -200,6 +200,7 @@ Interpretation:
 - `day_type`
 - `interval`
 - `pma_sso_mw`
+- `pma_sso_pct_of_underlying`
 
 Column types:
 
@@ -215,11 +216,14 @@ Column types:
 - `day_type`: `string`
 - `interval`: `int`
 - `pma_sso_mw`: `double`
+- `pma_sso_pct_of_underlying`: `double`
 
 Interpretation:
 
 - `pma_sso_mw` is an additive interval delta in MW
-- downstream systems combine it with baseline demand outside the package
+- `pma_sso_pct_of_underlying` is `100 * pma_sso_mw / underlying_demand_mw` for the same row
+- `pma_sso_pct_of_underlying` is `null` when `underlying_demand_mw` is zero
+- downstream systems combine `pma_sso_mw` with baseline demand outside the package
 
 ## Validation Report
 

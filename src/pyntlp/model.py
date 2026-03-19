@@ -175,6 +175,15 @@ def compute_pma_sso(
             .cast("double"),
         )
         .withColumn("pma_sso_mw", (F.col("delta_mwh") / F.lit(interval_hours)).cast("double"))
+        .withColumn(
+            "pma_sso_pct_of_underlying",
+            F.when(
+                F.col("underlying_demand_mw") != F.lit(0.0),
+                (F.col("pma_sso_mw") / F.col("underlying_demand_mw") * F.lit(100.0)),
+            )
+            .otherwise(F.lit(None).cast("double"))
+            .cast("double"),
+        )
         .select(
             F.col("fc_run_year").cast("int").alias("fc_run_year"),
             F.col("version").cast("string").alias("version"),
@@ -188,6 +197,7 @@ def compute_pma_sso(
             F.col("day_type").cast("string").alias("day_type"),
             F.col("interval").cast("int").alias("interval"),
             F.col("pma_sso_mw").cast("double").alias("pma_sso_mw"),
+            F.col("pma_sso_pct_of_underlying").cast("double").alias("pma_sso_pct_of_underlying"),
         )
     )
 

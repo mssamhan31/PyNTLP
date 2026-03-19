@@ -41,6 +41,11 @@ SEGMENT_METRICS_REQUIRED_COLUMNS = [
     "eligibility_rate_solar_battery",
 ]
 
+OUTPUT_METRIC_COLUMNS = [
+    "pma_sso_mw",
+    "pma_sso_pct_of_underlying",
+]
+
 OUTPUT_COLUMNS = [
     "fc_run_year",
     "version",
@@ -53,7 +58,15 @@ OUTPUT_COLUMNS = [
     "season",
     "day_type",
     "interval",
-    "pma_sso_mw",
+    *OUTPUT_METRIC_COLUMNS,
+]
+
+OUTPUT_KEY_COLUMNS = [
+    column_name for column_name in OUTPUT_COLUMNS if column_name not in OUTPUT_METRIC_COLUMNS
+]
+
+OUTPUT_NON_NULL_COLUMNS = [
+    column_name for column_name in OUTPUT_COLUMNS if column_name != "pma_sso_pct_of_underlying"
 ]
 
 GROUP_COLUMNS = [
@@ -83,6 +96,7 @@ OUTPUT_SCHEMA = StructType(
         StructField("day_type", StringType(), False),
         StructField("interval", IntegerType(), False),
         StructField("pma_sso_mw", DoubleType(), False),
+        StructField("pma_sso_pct_of_underlying", DoubleType(), True),
     ]
 )
 
