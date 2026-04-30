@@ -5,11 +5,14 @@ from pyspark.sql.types import DoubleType, IntegerType, StringType, StructField, 
 BASELINE_REQUIRED_COLUMNS = [
     "fc_object_id",
     "lga_segment",
-    "scenario",
+    "customer_type",
     "fcy",
+    "forecast_scenario",
     "season",
     "day_type",
     "representative_day",
+    "coincident_type",
+    "poe",
     "interval",
     "baseline_demand_mw",
 ]
@@ -44,11 +47,14 @@ OUTPUT_METRIC_COLUMNS = [
 OUTPUT_COLUMNS = [
     "fc_object_id",
     "lga_segment",
-    "scenario",
+    "customer_type",
     "fcy",
+    "forecast_scenario",
     "season",
     "day_type",
     "representative_day",
+    "coincident_type",
+    "poe",
     "interval",
     *OUTPUT_METRIC_COLUMNS,
 ]
@@ -64,22 +70,28 @@ OUTPUT_NON_NULL_COLUMNS = [
 GROUP_COLUMNS = [
     "fc_object_id",
     "lga_segment",
-    "scenario",
+    "customer_type",
     "fcy",
+    "forecast_scenario",
     "season",
     "day_type",
     "representative_day",
+    "coincident_type",
+    "poe",
 ]
 
 OUTPUT_SCHEMA = StructType(
     [
         StructField("fc_object_id", IntegerType(), False),
         StructField("lga_segment", StringType(), False),
-        StructField("scenario", StringType(), False),
+        StructField("customer_type", StringType(), False),
         StructField("fcy", IntegerType(), False),
+        StructField("forecast_scenario", StringType(), False),
         StructField("season", StringType(), False),
         StructField("day_type", StringType(), False),
         StructField("representative_day", StringType(), False),
+        StructField("coincident_type", StringType(), False),
+        StructField("poe", StringType(), False),
         StructField("interval", IntegerType(), False),
         StructField("delta_mw", DoubleType(), False),
     ]

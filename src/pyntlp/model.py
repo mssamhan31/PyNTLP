@@ -10,8 +10,9 @@ from .schema import (
     GROUP_COLUMNS,
     LGA_SEGMENT_METRICS_REQUIRED_COLUMNS,
     OUTPUT_COLUMNS,
+    OUTPUT_KEY_COLUMNS,
 )
-from .utils import ensure_required_columns, lga_segment_parameter_expr
+from .utils import ensure_no_duplicate_keys, ensure_required_columns, lga_segment_parameter_expr
 from .windows import get_window_intervals
 
 DER_GROUP_RATE_COLUMNS = {
@@ -46,14 +47,18 @@ def compute_pma_sso(
     baseline = baseline_profiles_df.select(
         F.col("fc_object_id").cast("int").alias("fc_object_id"),
         F.col("lga_segment").cast("string").alias("lga_segment"),
-        F.col("scenario").cast("string").alias("scenario"),
+        F.col("customer_type").cast("string").alias("customer_type"),
         F.col("fcy").cast("int").alias("fcy"),
+        F.col("forecast_scenario").cast("string").alias("forecast_scenario"),
         F.col("season").cast("string").alias("season"),
         F.col("day_type").cast("string").alias("day_type"),
         F.col("representative_day").cast("string").alias("representative_day"),
+        F.col("coincident_type").cast("string").alias("coincident_type"),
+        F.col("poe").cast("string").alias("poe"),
         F.col("interval").cast("int").alias("interval"),
         F.col("baseline_demand_mw").cast("double").alias("baseline_demand_mw"),
     )
+    ensure_no_duplicate_keys(baseline, OUTPUT_KEY_COLUMNS, "baseline_profiles_df")
 
     lga_segment_metrics = (
         lga_segment_metrics_df.select(
@@ -158,8 +163,8 @@ def compute_pma_sso(
     deltas = (
         enriched.join(
             group_metrics.select(
-            *GROUP_COLUMNS,
-            "allocatable_shift_mwh",
+                *GROUP_COLUMNS,
+                "allocatable_shift_mwh",
                 "window_row_count",
                 "donor_row_count",
             ),
@@ -183,11 +188,14 @@ def compute_pma_sso(
         .select(
             F.col("fc_object_id").cast("int").alias("fc_object_id"),
             F.col("lga_segment").cast("string").alias("lga_segment"),
-            F.col("scenario").cast("string").alias("scenario"),
+            F.col("customer_type").cast("string").alias("customer_type"),
             F.col("fcy").cast("int").alias("fcy"),
+            F.col("forecast_scenario").cast("string").alias("forecast_scenario"),
             F.col("season").cast("string").alias("season"),
             F.col("day_type").cast("string").alias("day_type"),
             F.col("representative_day").cast("string").alias("representative_day"),
+            F.col("coincident_type").cast("string").alias("coincident_type"),
+            F.col("poe").cast("string").alias("poe"),
             F.col("interval").cast("int").alias("interval"),
             F.col("delta_mw").cast("double").alias("delta_mw"),
         )

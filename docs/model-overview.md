@@ -2,7 +2,7 @@
 
 The model converts SSO policy settings into additive interval PMA deltas named `delta_mw`.
 
-The model grain is `lga_segment`. The same string is used for:
+Eligibility metrics are calculated at `lga_segment` grain. The same string is used for:
 
 - joining baseline profiles to NMI-derived eligibility metrics
 - residential eligibility pattern matching
@@ -25,7 +25,7 @@ Residential eligibility is matched against the full `lga_segment` string. DER gr
 
 ## PMA Calculation
 
-For each `lga_segment` and profile group:
+For each `lga_segment` and baseline profile group:
 
 ```text
 daily_energy_mwh = sum(baseline_demand_mw * interval_hours)
@@ -42,10 +42,13 @@ The output table is:
 
 - `fc_object_id`
 - `lga_segment`
-- `scenario`
+- `customer_type`
 - `fcy`
+- `forecast_scenario`
 - `season`
 - `day_type`
 - `representative_day`
+- `coincident_type`
+- `poe`
 - `interval`
 - `delta_mw`

@@ -1,12 +1,12 @@
 # PyNTLP
 
-`pyntlp` is a Spark-native Python package for converting SSO policy assumptions into additive PMA interval deltas at `lga_segment` grain.
+`pyntlp` is a Spark-native Python package for converting SSO policy assumptions into additive PMA interval deltas using `lga_segment` eligibility metrics.
 
-The FC2026 public contract is intentionally simple:
+The FC2026 public contract mirrors the baseline table shape:
 
-- baseline input uses `lga_segment` and `baseline_demand_mw`
+- baseline input uses the baseline dimensions plus `baseline_demand_mw`
 - NMI attributes use only `nmi` and `lga_segment`
-- PMA output uses `delta_mw`
+- PMA output uses the same dimensions, replacing `baseline_demand_mw` with `delta_mw`
 
 ## API
 
@@ -41,11 +41,14 @@ Baseline profiles:
 
 - `fc_object_id`
 - `lga_segment`
-- `scenario`
+- `customer_type`
 - `fcy`
+- `forecast_scenario`
 - `season`
 - `day_type`
 - `representative_day`
+- `coincident_type`
+- `poe`
 - `interval`
 - `baseline_demand_mw`
 
@@ -63,11 +66,14 @@ Smart meter attributes:
 
 - `fc_object_id`
 - `lga_segment`
-- `scenario`
+- `customer_type`
 - `fcy`
+- `forecast_scenario`
 - `season`
 - `day_type`
 - `representative_day`
+- `coincident_type`
+- `poe`
 - `interval`
 - `delta_mw`
 

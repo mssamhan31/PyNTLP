@@ -39,11 +39,14 @@ Baseline profiles:
 
 - `fc_object_id`
 - `lga_segment`
-- `scenario`
+- `customer_type`
 - `fcy`
+- `forecast_scenario`
 - `season`
 - `day_type`
 - `representative_day`
+- `coincident_type`
+- `poe`
 - `interval`
 - `baseline_demand_mw`
 
@@ -63,11 +66,14 @@ Smart meter attributes:
 
 - `fc_object_id`
 - `lga_segment`
-- `scenario`
+- `customer_type`
 - `fcy`
+- `forecast_scenario`
 - `season`
 - `day_type`
 - `representative_day`
+- `coincident_type`
+- `poe`
 - `interval`
 - `delta_mw`
 

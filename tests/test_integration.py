@@ -10,19 +10,22 @@ def test_end_to_end_package_flow_runs_on_normalised_data(spark, base_params):
 
     baseline_profiles_df = spark.createDataFrame(
         [
-            (1001, "Central Coast (NSW)_Large Res - NoOP - No_DER", "base", 2026, "summer", "business", "weekday", 1, 1.0),
-            (1001, "Central Coast (NSW)_Large Res - NoOP - No_DER", "base", 2026, "summer", "business", "weekday", 2, 1.0),
-            (1001, "Central Coast (NSW)_Large Res - NoOP - No_DER", "base", 2026, "summer", "business", "weekday", 3, 1.0),
-            (1001, "Central Coast (NSW)_Large Res - NoOP - No_DER", "base", 2026, "summer", "business", "weekday", 4, 1.0),
+            (1001, "Central Coast (NSW)_Large Res - NoOP - No_DER", "Residential", 2026, "base", "summer", "business", "weekday", "local non-coincident", "poe50", 1, 1.0),
+            (1001, "Central Coast (NSW)_Large Res - NoOP - No_DER", "Residential", 2026, "base", "summer", "business", "weekday", "local non-coincident", "poe50", 2, 1.0),
+            (1001, "Central Coast (NSW)_Large Res - NoOP - No_DER", "Residential", 2026, "base", "summer", "business", "weekday", "local non-coincident", "poe50", 3, 1.0),
+            (1001, "Central Coast (NSW)_Large Res - NoOP - No_DER", "Residential", 2026, "base", "summer", "business", "weekday", "local non-coincident", "poe50", 4, 1.0),
         ],
         [
             "fc_object_id",
             "lga_segment",
-            "scenario",
+            "customer_type",
             "fcy",
+            "forecast_scenario",
             "season",
             "day_type",
             "representative_day",
+            "coincident_type",
+            "poe",
             "interval",
             "baseline_demand_mw",
         ],
@@ -50,11 +53,14 @@ def test_end_to_end_package_flow_runs_on_normalised_data(spark, base_params):
     assert pma_delta_df.columns == [
         "fc_object_id",
         "lga_segment",
-        "scenario",
+        "customer_type",
         "fcy",
+        "forecast_scenario",
         "season",
         "day_type",
         "representative_day",
+        "coincident_type",
+        "poe",
         "interval",
         "delta_mw",
     ]

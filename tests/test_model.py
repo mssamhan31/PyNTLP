@@ -3,9 +3,39 @@ from __future__ import annotations
 import copy
 from math import isclose
 
+import pytest
+
 from pyntlp import compute_pma_sso, load_params, validate_pma
 
 LGA_SEGMENT = "Central Coast (NSW)_Large Res - NoOP - No_DER"
+OUTPUT_COLUMNS = [
+    "fc_object_id",
+    "lga_segment",
+    "customer_type",
+    "fcy",
+    "forecast_scenario",
+    "season",
+    "day_type",
+    "representative_day",
+    "coincident_type",
+    "poe",
+    "interval",
+    "delta_mw",
+]
+BASELINE_COLUMNS = [
+    "fc_object_id",
+    "lga_segment",
+    "customer_type",
+    "fcy",
+    "forecast_scenario",
+    "season",
+    "day_type",
+    "representative_day",
+    "coincident_type",
+    "poe",
+    "interval",
+    "baseline_demand_mw",
+]
 
 
 def _baseline_profiles_df(spark):
@@ -15,22 +45,64 @@ def _baseline_profiles_df(spark):
 def _baseline_profiles_df_with_values(spark, baseline_values):
     return spark.createDataFrame(
         [
-            (1001, LGA_SEGMENT, "base", 2026, "summer", "business", "weekday", 1, baseline_values[0]),
-            (1001, LGA_SEGMENT, "base", 2026, "summer", "business", "weekday", 2, baseline_values[1]),
-            (1001, LGA_SEGMENT, "base", 2026, "summer", "business", "weekday", 3, baseline_values[2]),
-            (1001, LGA_SEGMENT, "base", 2026, "summer", "business", "weekday", 4, baseline_values[3]),
+            (
+                1001,
+                LGA_SEGMENT,
+                "Residential",
+                2026,
+                "base",
+                "summer",
+                "business",
+                "weekday",
+                "local non-coincident",
+                "poe50",
+                1,
+                baseline_values[0],
+            ),
+            (
+                1001,
+                LGA_SEGMENT,
+                "Residential",
+                2026,
+                "base",
+                "summer",
+                "business",
+                "weekday",
+                "local non-coincident",
+                "poe50",
+                2,
+                baseline_values[1],
+            ),
+            (
+                1001,
+                LGA_SEGMENT,
+                "Residential",
+                2026,
+                "base",
+                "summer",
+                "business",
+                "weekday",
+                "local non-coincident",
+                "poe50",
+                3,
+                baseline_values[2],
+            ),
+            (
+                1001,
+                LGA_SEGMENT,
+                "Residential",
+                2026,
+                "base",
+                "summer",
+                "business",
+                "weekday",
+                "local non-coincident",
+                "poe50",
+                4,
+                baseline_values[3],
+            ),
         ],
-        [
-            "fc_object_id",
-            "lga_segment",
-            "scenario",
-            "fcy",
-            "season",
-            "day_type",
-            "representative_day",
-            "interval",
-            "baseline_demand_mw",
-        ],
+        BASELINE_COLUMNS,
     )
 
 
@@ -110,17 +182,73 @@ def test_compute_pma_sso_outputs_native_fc2026_columns(spark, base_params):
         params=params,
     )
 
-    assert pma_delta_df.columns == [
-        "fc_object_id",
-        "lga_segment",
-        "scenario",
-        "fcy",
-        "season",
-        "day_type",
-        "representative_day",
-        "interval",
-        "delta_mw",
-    ]
+    assert pma_delta_df.columns == OUTPUT_COLUMNS
+
+
+def test_compute_pma_sso_preserves_baseline_shape_dimensions(spark, base_params):
+    params = load_params(copy.deepcopy(base_params))
+    baseline_profiles_df = spark.createDataFrame(
+        [
+            (1001, LGA_SEGMENT, "Residential", 2026, "base", "summer", "business", "weekday", "local non-coincident", "poe50", 1, 1.0),
+            (1001, LGA_SEGMENT, "Residential", 2026, "base", "summer", "business", "weekday", "local non-coincident", "poe50", 2, 1.0),
+            (1001, LGA_SEGMENT, "Residential", 2026, "base", "summer", "business", "weekday", "local non-coincident", "poe50", 3, 1.0),
+            (1001, LGA_SEGMENT, "Residential", 2026, "base", "summer", "business", "weekday", "local non-coincident", "poe50", 4, 1.0),
+            (1001, LGA_SEGMENT, "Small Business", 2026, "base", "summer", "business", "weekday", "local coincident", "poe10", 1, 2.0),
+            (1001, LGA_SEGMENT, "Small Business", 2026, "base", "summer", "business", "weekday", "local coincident", "poe10", 2, 2.0),
+            (1001, LGA_SEGMENT, "Small Business", 2026, "base", "summer", "business", "weekday", "local coincident", "poe10", 3, 2.0),
+            (1001, LGA_SEGMENT, "Small Business", 2026, "base", "summer", "business", "weekday", "local coincident", "poe10", 4, 2.0),
+        ],
+        BASELINE_COLUMNS,
+    )
+
+    pma_delta_df = compute_pma_sso(
+        baseline_profiles_df=baseline_profiles_df,
+        lga_segment_metrics_df=_lga_segment_metrics_df(spark, n_total=10, n_eligible_no_der=10),
+        params=params,
+    )
+
+    dimension_rows = {
+        (
+            row["customer_type"],
+            row["forecast_scenario"],
+            row["coincident_type"],
+            row["poe"],
+        )
+        for row in pma_delta_df.select(
+            "customer_type",
+            "forecast_scenario",
+            "coincident_type",
+            "poe",
+        ).distinct().collect()
+    }
+
+    assert dimension_rows == {
+        ("Residential", "base", "local non-coincident", "poe50"),
+        ("Small Business", "base", "local coincident", "poe10"),
+    }
+
+    validation_status = {
+        row["check_name"]: row["status"] for row in validate_pma(pma_delta_df, params).collect()
+    }
+    assert validation_status["group_energy_neutrality"] == "PASS"
+
+
+def test_compute_pma_sso_rejects_duplicate_expanded_keys(spark, base_params):
+    params = load_params(copy.deepcopy(base_params))
+    baseline_profiles_df = spark.createDataFrame(
+        [
+            (1001, LGA_SEGMENT, "Residential", 2026, "base", "summer", "business", "weekday", "local non-coincident", "poe50", 1, 1.0),
+            (1001, LGA_SEGMENT, "Residential", 2026, "base", "summer", "business", "weekday", "local non-coincident", "poe50", 1, 2.0),
+        ],
+        BASELINE_COLUMNS,
+    )
+
+    with pytest.raises(ValueError, match="duplicate rows on key"):
+        compute_pma_sso(
+            baseline_profiles_df=baseline_profiles_df,
+            lga_segment_metrics_df=_lga_segment_metrics_df(spark, n_total=10, n_eligible_no_der=10),
+            params=params,
+        )
 
 
 def test_compute_pma_sso_respects_cap_binding(spark, base_params):

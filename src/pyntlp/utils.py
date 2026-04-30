@@ -16,6 +16,14 @@ def ensure_required_columns(df: DataFrame, required_columns: list[str], df_name:
         raise ValueError(f"{df_name} is missing required columns: {missing_columns}")
 
 
+def ensure_no_duplicate_keys(df: DataFrame, key_columns: list[str], df_name: str) -> None:
+    """Raise a clear error if a DataFrame has duplicate key rows."""
+
+    duplicate_count = df.groupBy(*key_columns).count().filter(F.col("count") > 1).limit(1).count()
+    if duplicate_count:
+        raise ValueError(f"{df_name} contains duplicate rows on key: {key_columns}")
+
+
 def normalise_token(value: Any) -> str:
     """Normalise scalar tokens for case-insensitive exact matches."""
 
