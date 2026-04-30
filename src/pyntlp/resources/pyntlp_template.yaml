@@ -4,26 +4,18 @@ constants:
   interval_minutes: 30
   intervals_per_day: 48
   timezone: Australia/Sydney
-  segment_column: segment
-  output_value_column: pma_sso_mw
-  schema_version: v0.1
+  schema_version: fc2026_v0.1
 
 parameters:
-  # Regex patterns matched against segment values to identify residential segments.
+  # Regex patterns matched anywhere inside full lga_segment values.
   eligible_resi_patterns:
-    - "(?i)resi"
+    - "Large Res"
+    - "Med Res"
+    - "Small Res"
+    - "Apartment"
 
   # Exact smart meter code used to identify eligibility.
   smart_meter_code: "SMART"
-
-  # Canonical eligibility cohorts mapped to raw source DER values.
-  eligible_der_groups:
-    No_DER:
-      - "No_DER"
-    Solar:
-      - "Solar"
-    Solar_Battery:
-      - "Solar_Battery"
 
   # Policy window is start-inclusive and end-exclusive.
   # Values must align to interval_minutes.
@@ -37,7 +29,7 @@ parameters:
   # Daily energy cap per participant in kWh.
   cap_kwh_per_day: 4.0
 
-  # Uptake ceiling by eligible DER cohort.
+  # Uptake ceiling by DER suffix inferred from lga_segment.
   u_eligible_der_group:
     No_DER: 0.25
     Solar: 0.05
@@ -47,10 +39,9 @@ parameters:
   ramp_start_fcy: 2026
   ramp_full_fcy: 2028
 
-  # Share of baseline daily energy considered shiftable by segment.
-  s_segment:
+  # Share of baseline daily energy considered shiftable by lga_segment.
+  s_lga_segment:
     default: 0.05
-    Residential: 0.10
 
   # Behaviour response multiplier applied after adoption and shiftability.
   k_response: 0.80

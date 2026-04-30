@@ -47,18 +47,11 @@ def base_params():
             "interval_minutes": 60,
             "intervals_per_day": 24,
             "timezone": "UTC",
-            "segment_column": "segment",
-            "output_value_column": "pma_sso_mw",
             "schema_version": "v0.1",
         },
         "parameters": {
-            "eligible_resi_patterns": ["resi"],
+            "eligible_resi_patterns": ["Large Res", "Med Res", "Small Res", "Apartment"],
             "smart_meter_code": "SM",
-            "eligible_der_groups": {
-                "No_DER": ["No_DER"],
-                "Solar": ["Solar"],
-                "Solar_Battery": ["Solar_Battery"],
-            },
             "window_start": "01:00",
             "window_end": "03:00",
             "cap_kwh_per_day": 5000.0,
@@ -69,9 +62,9 @@ def base_params():
             },
             "ramp_start_fcy": 2025,
             "ramp_full_fcy": 2026,
-            "s_segment": {
+            "s_lga_segment": {
                 "default": 0.25,
-                "Residential": 0.25,
+                "Central Coast (NSW)_Large Res - NoOP - No_DER": 0.25,
             },
             "k_response": 1.0,
             "window_shape": "flat",

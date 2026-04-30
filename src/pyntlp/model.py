@@ -8,10 +8,10 @@ from pyspark.sql import functions as F
 from .schema import (
     BASELINE_REQUIRED_COLUMNS,
     GROUP_COLUMNS,
+    LGA_SEGMENT_METRICS_REQUIRED_COLUMNS,
     OUTPUT_COLUMNS,
-    SEGMENT_METRICS_REQUIRED_COLUMNS,
 )
-from .utils import ensure_required_columns, segment_parameter_expr
+from .utils import ensure_required_columns, lga_segment_parameter_expr
 from .windows import get_window_intervals
 
 DER_GROUP_RATE_COLUMNS = {
@@ -23,13 +23,17 @@ DER_GROUP_RATE_COLUMNS = {
 
 def compute_pma_sso(
     baseline_profiles_df: DataFrame,
-    segment_metrics_df: DataFrame,
+    lga_segment_metrics_df: DataFrame,
     params: dict,
 ) -> DataFrame:
-    """Compute additive PMA SSO interval deltas from baseline and segment metrics."""
+    """Compute additive PMA SSO interval deltas from baseline and lga_segment metrics."""
 
     ensure_required_columns(baseline_profiles_df, BASELINE_REQUIRED_COLUMNS, "baseline_profiles_df")
-    ensure_required_columns(segment_metrics_df, SEGMENT_METRICS_REQUIRED_COLUMNS, "segment_metrics_df")
+    ensure_required_columns(
+        lga_segment_metrics_df,
+        LGA_SEGMENT_METRICS_REQUIRED_COLUMNS,
+        "lga_segment_metrics_df",
+    )
 
     window_intervals, donor_intervals, interval_hours = get_window_intervals(params)
     parameters = params["parameters"]
@@ -37,26 +41,23 @@ def compute_pma_sso(
     k_response = float(parameters["k_response"])
     cap_kwh_per_day = float(parameters["cap_kwh_per_day"])
     u_eligible_der_group = parameters["u_eligible_der_group"]
-    s_segment = parameters["s_segment"]
+    s_lga_segment = parameters["s_lga_segment"]
 
     baseline = baseline_profiles_df.select(
-        F.col("fc_run_year").cast("int").alias("fc_run_year"),
-        F.col("version").cast("string").alias("version"),
         F.col("fc_object_id").cast("int").alias("fc_object_id"),
-        F.col("segment").cast("string").alias("segment"),
+        F.col("lga_segment").cast("string").alias("lga_segment"),
+        F.col("scenario").cast("string").alias("scenario"),
         F.col("fcy").cast("int").alias("fcy"),
-        F.col("forecast_scenario").cast("string").alias("forecast_scenario"),
-        F.col("poe").cast("string").alias("poe"),
-        F.col("representative_day").cast("string").alias("representative_day"),
         F.col("season").cast("string").alias("season"),
         F.col("day_type").cast("string").alias("day_type"),
+        F.col("representative_day").cast("string").alias("representative_day"),
         F.col("interval").cast("int").alias("interval"),
-        F.col("underlying_demand_mw").cast("double").alias("underlying_demand_mw"),
+        F.col("baseline_demand_mw").cast("double").alias("baseline_demand_mw"),
     )
 
-    segment_metrics = (
-        segment_metrics_df.select(
-            F.col("segment").cast("string").alias("segment"),
+    lga_segment_metrics = (
+        lga_segment_metrics_df.select(
+            F.col("lga_segment").cast("string").alias("lga_segment"),
             F.col("n_total").cast("int").alias("n_total"),
             F.col("n_eligible").cast("int").alias("n_eligible"),
             F.col("eligibility_rate").cast("double").alias("eligibility_rate"),
@@ -67,7 +68,7 @@ def compute_pma_sso(
             F.col("eligibility_rate_solar").cast("double").alias("eligibility_rate_solar"),
             F.col("eligibility_rate_solar_battery").cast("double").alias("eligibility_rate_solar_battery"),
         )
-        .dropDuplicates(["segment"])
+        .dropDuplicates(["lga_segment"])
     )
 
     eligible_uptake_rate_expr = F.lit(0.0)
@@ -77,7 +78,7 @@ def compute_pma_sso(
         )
 
     enriched = (
-        baseline.join(segment_metrics, on="segment", how="left")
+        baseline.join(lga_segment_metrics, on="lga_segment", how="left")
         .fillna(
             {
                 "n_total": 0,
@@ -93,7 +94,11 @@ def compute_pma_sso(
         )
         .withColumn(
             "s_value",
-            segment_parameter_expr(F.col("segment"), s_segment, float(s_segment["default"])).cast("double"),
+            lga_segment_parameter_expr(
+                F.col("lga_segment"),
+                s_lga_segment,
+                float(s_lga_segment["default"]),
+            ).cast("double"),
         )
         .withColumn(
             "ramp_rate",
@@ -116,7 +121,7 @@ def compute_pma_sso(
     group_metrics = (
         enriched.groupBy(*GROUP_COLUMNS)
         .agg(
-            (F.sum(F.coalesce(F.col("underlying_demand_mw"), F.lit(0.0))) * F.lit(interval_hours))
+            (F.sum(F.coalesce(F.col("baseline_demand_mw"), F.lit(0.0))) * F.lit(interval_hours))
             .cast("double")
             .alias("daily_energy_mwh"),
             F.max(F.col("n_total")).cast("int").alias("n_total"),
@@ -153,8 +158,8 @@ def compute_pma_sso(
     deltas = (
         enriched.join(
             group_metrics.select(
-                *GROUP_COLUMNS,
-                "allocatable_shift_mwh",
+            *GROUP_COLUMNS,
+            "allocatable_shift_mwh",
                 "window_row_count",
                 "donor_row_count",
             ),
@@ -174,30 +179,17 @@ def compute_pma_sso(
             .otherwise(F.lit(0.0))
             .cast("double"),
         )
-        .withColumn("pma_sso_mw", (F.col("delta_mwh") / F.lit(interval_hours)).cast("double"))
-        .withColumn(
-            "pma_sso_pct_of_underlying",
-            F.when(
-                F.col("underlying_demand_mw") != F.lit(0.0),
-                (F.col("pma_sso_mw") / F.col("underlying_demand_mw") * F.lit(100.0)),
-            )
-            .otherwise(F.lit(None).cast("double"))
-            .cast("double"),
-        )
+        .withColumn("delta_mw", (F.col("delta_mwh") / F.lit(interval_hours)).cast("double"))
         .select(
-            F.col("fc_run_year").cast("int").alias("fc_run_year"),
-            F.col("version").cast("string").alias("version"),
             F.col("fc_object_id").cast("int").alias("fc_object_id"),
-            F.col("segment").cast("string").alias("segment"),
+            F.col("lga_segment").cast("string").alias("lga_segment"),
+            F.col("scenario").cast("string").alias("scenario"),
             F.col("fcy").cast("int").alias("fcy"),
-            F.col("forecast_scenario").cast("string").alias("forecast_scenario"),
-            F.col("poe").cast("string").alias("poe"),
-            F.col("representative_day").cast("string").alias("representative_day"),
             F.col("season").cast("string").alias("season"),
             F.col("day_type").cast("string").alias("day_type"),
+            F.col("representative_day").cast("string").alias("representative_day"),
             F.col("interval").cast("int").alias("interval"),
-            F.col("pma_sso_mw").cast("double").alias("pma_sso_mw"),
-            F.col("pma_sso_pct_of_underlying").cast("double").alias("pma_sso_pct_of_underlying"),
+            F.col("delta_mw").cast("double").alias("delta_mw"),
         )
     )
 

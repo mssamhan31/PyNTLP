@@ -34,7 +34,7 @@ Test coverage currently includes:
 - import smoke checks
 - parameter validation
 - interval window logic
-- segment eligibility
+- lga_segment eligibility
 - model neutrality and cap behaviour
 - small Spark integration flow
 

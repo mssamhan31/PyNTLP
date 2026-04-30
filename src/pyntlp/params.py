@@ -20,6 +20,9 @@ REQUIRED_CONSTANT_KEYS = {
     "interval_minutes",
     "intervals_per_day",
     "timezone",
+}
+
+REMOVED_CONSTANT_KEYS = {
     "segment_column",
     "output_value_column",
 }
@@ -27,18 +30,22 @@ REQUIRED_CONSTANT_KEYS = {
 REQUIRED_PARAMETER_KEYS = {
     "eligible_resi_patterns",
     "smart_meter_code",
-    "eligible_der_groups",
     "window_start",
     "window_end",
     "cap_kwh_per_day",
     "u_eligible_der_group",
     "ramp_start_fcy",
     "ramp_full_fcy",
-    "s_segment",
+    "s_lga_segment",
     "k_response",
     "window_shape",
     "donor_shape",
     "energy_accounting",
+}
+
+REMOVED_PARAMETER_KEYS = {
+    "eligible_der_groups",
+    "s_segment",
 }
 
 TIME_PATTERN = re.compile(r"^([01]\d|2[0-3]):([0-5]\d)$")
@@ -81,6 +88,13 @@ def _validate_constants(raw_constants: Any) -> dict[str, Any]:
     if not isinstance(raw_constants, dict):
         raise ValueError("`constants` must be a dictionary.")
 
+    removed_keys = sorted(REMOVED_CONSTANT_KEYS & set(raw_constants))
+    if removed_keys:
+        raise ValueError(
+            "`constants` contains removed keys. Use the FC2026 lga_segment contract instead: "
+            f"{removed_keys}"
+        )
+
     missing_keys = sorted(REQUIRED_CONSTANT_KEYS - set(raw_constants))
     if missing_keys:
         raise ValueError(f"`constants` missing required keys: {missing_keys}")
@@ -102,8 +116,6 @@ def _validate_constants(raw_constants: Any) -> dict[str, Any]:
         "interval_minutes": interval_minutes,
         "intervals_per_day": intervals_per_day,
         "timezone": _require_str(raw_constants, "timezone"),
-        "segment_column": _require_str(raw_constants, "segment_column"),
-        "output_value_column": _require_str(raw_constants, "output_value_column"),
         "schema_version": _optional_str(raw_constants.get("schema_version")),
     }
 
@@ -111,6 +123,13 @@ def _validate_constants(raw_constants: Any) -> dict[str, Any]:
 def _validate_parameters(raw_parameters: Any) -> dict[str, Any]:
     if not isinstance(raw_parameters, dict):
         raise ValueError("`parameters` must be a dictionary.")
+
+    removed_keys = sorted(REMOVED_PARAMETER_KEYS & set(raw_parameters))
+    if removed_keys:
+        raise ValueError(
+            "`parameters` contains removed keys. Use `s_lga_segment`; DER group is inferred from "
+            f"`lga_segment` suffix: {removed_keys}"
+        )
 
     missing_keys = sorted(REQUIRED_PARAMETER_KEYS - set(raw_parameters))
     if missing_keys:
@@ -126,7 +145,6 @@ def _validate_parameters(raw_parameters: Any) -> dict[str, Any]:
     return {
         "eligible_resi_patterns": _require_str_list(raw_parameters, "eligible_resi_patterns"),
         "smart_meter_code": _require_str(raw_parameters, "smart_meter_code"),
-        "eligible_der_groups": _require_eligible_der_groups(raw_parameters, "eligible_der_groups"),
         "window_start": _require_time(raw_parameters, "window_start"),
         "window_end": _require_time(raw_parameters, "window_end"),
         "donor_window_start": donor_window_start,
@@ -141,7 +159,13 @@ def _validate_parameters(raw_parameters: Any) -> dict[str, Any]:
         ),
         "ramp_start_fcy": ramp_start_fcy,
         "ramp_full_fcy": ramp_full_fcy,
-        "s_segment": _require_float_mapping(raw_parameters, "s_segment", require_default=True, minimum=0.0, maximum=1.0),
+        "s_lga_segment": _require_float_mapping(
+            raw_parameters,
+            "s_lga_segment",
+            require_default=True,
+            minimum=0.0,
+            maximum=1.0,
+        ),
         "k_response": _require_float(raw_parameters, "k_response", minimum=0.0),
         "window_shape": _require_choice(raw_parameters, "window_shape", SUPPORTED_WINDOW_SHAPES),
         "donor_shape": _require_choice(raw_parameters, "donor_shape", SUPPORTED_DONOR_SHAPES),
@@ -295,45 +319,6 @@ def _require_exact_float_mapping(
         normalised_mapping[item_key] = float(numeric_value)
 
     return normalised_mapping
-
-
-def _require_eligible_der_groups(container: dict[str, Any], key: str) -> dict[str, list[str]]:
-    mapping = container.get(key)
-    if not isinstance(mapping, dict) or not mapping:
-        raise ValueError(f"`{key}` must be a non-empty mapping.")
-
-    missing_keys = sorted(set(ELIGIBLE_DER_GROUP_KEYS) - set(mapping))
-    extra_keys = sorted(set(mapping) - set(ELIGIBLE_DER_GROUP_KEYS))
-    if missing_keys or extra_keys:
-        raise ValueError(
-            f"`{key}` must contain exactly {list(ELIGIBLE_DER_GROUP_KEYS)}. missing={missing_keys}; extra={extra_keys}"
-        )
-
-    cleaned_mapping: dict[str, list[str]] = {}
-    raw_value_to_group: dict[str, str] = {}
-
-    for group_name in ELIGIBLE_DER_GROUP_KEYS:
-        cleaned_values: list[str] = []
-        raw_values = mapping[group_name]
-        if not isinstance(raw_values, list) or not raw_values:
-            raise ValueError(f"`{key}.{group_name}` must be a non-empty list of strings.")
-
-        for raw_value in raw_values:
-            if not isinstance(raw_value, str) or not raw_value.strip():
-                raise ValueError(f"`{key}.{group_name}` must contain only non-empty strings.")
-            cleaned_value = raw_value.strip()
-            normalised_value = cleaned_value.upper()
-            previous_group = raw_value_to_group.get(normalised_value)
-            if previous_group is not None and previous_group != group_name:
-                raise ValueError(
-                    f"`{key}` maps raw DER value `{cleaned_value}` to both `{previous_group}` and `{group_name}`."
-                )
-            raw_value_to_group[normalised_value] = group_name
-            cleaned_values.append(cleaned_value)
-
-        cleaned_mapping[group_name] = cleaned_values
-
-    return cleaned_mapping
 
 
 def _validate_optional_donor_window(container: dict[str, Any]) -> tuple[str | None, str | None]:

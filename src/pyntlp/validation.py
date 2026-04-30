@@ -70,7 +70,7 @@ def validate_pma(pma_delta_df: DataFrame, params: dict) -> DataFrame:
             )
         )
 
-    missing_energy_columns = sorted(set(GROUP_COLUMNS + ["pma_sso_mw"]) - set(pma_delta_df.columns))
+    missing_energy_columns = sorted(set(GROUP_COLUMNS + ["delta_mw"]) - set(pma_delta_df.columns))
     if missing_energy_columns:
         report_rows.append(
             (
@@ -84,7 +84,7 @@ def validate_pma(pma_delta_df: DataFrame, params: dict) -> DataFrame:
 
     interval_hours = get_window_intervals(params)[2]
     energy_error_df = pma_delta_df.groupBy(*GROUP_COLUMNS).agg(
-        F.abs(F.sum(F.col("pma_sso_mw") * F.lit(interval_hours))).alias("abs_energy_error_mwh")
+        F.abs(F.sum(F.col("delta_mw") * F.lit(interval_hours))).alias("abs_energy_error_mwh")
     )
     max_error = energy_error_df.agg(F.max(F.col("abs_energy_error_mwh"))).first()[0]
     max_error = float(max_error or 0.0)

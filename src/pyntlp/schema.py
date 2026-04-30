@@ -3,24 +3,20 @@
 from pyspark.sql.types import DoubleType, IntegerType, StringType, StructField, StructType
 
 BASELINE_REQUIRED_COLUMNS = [
-    "fc_run_year",
-    "version",
     "fc_object_id",
-    "segment",
+    "lga_segment",
+    "scenario",
     "fcy",
-    "forecast_scenario",
-    "poe",
-    "representative_day",
     "season",
     "day_type",
+    "representative_day",
     "interval",
-    "underlying_demand_mw",
+    "baseline_demand_mw",
 ]
 
-SEGMENT_ATTRIBUTES_REQUIRED_COLUMNS = [
+LGA_SEGMENT_ATTRIBUTES_REQUIRED_COLUMNS = [
     "nmi",
-    "segment",
-    "der_type",
+    "lga_segment",
 ]
 
 SMART_METER_REQUIRED_COLUMNS = [
@@ -28,8 +24,8 @@ SMART_METER_REQUIRED_COLUMNS = [
     "meter_type_code",
 ]
 
-SEGMENT_METRICS_REQUIRED_COLUMNS = [
-    "segment",
+LGA_SEGMENT_METRICS_REQUIRED_COLUMNS = [
+    "lga_segment",
     "n_total",
     "n_eligible",
     "eligibility_rate",
@@ -42,21 +38,17 @@ SEGMENT_METRICS_REQUIRED_COLUMNS = [
 ]
 
 OUTPUT_METRIC_COLUMNS = [
-    "pma_sso_mw",
-    "pma_sso_pct_of_underlying",
+    "delta_mw",
 ]
 
 OUTPUT_COLUMNS = [
-    "fc_run_year",
-    "version",
     "fc_object_id",
-    "segment",
+    "lga_segment",
+    "scenario",
     "fcy",
-    "forecast_scenario",
-    "poe",
-    "representative_day",
     "season",
     "day_type",
+    "representative_day",
     "interval",
     *OUTPUT_METRIC_COLUMNS,
 ]
@@ -66,37 +58,30 @@ OUTPUT_KEY_COLUMNS = [
 ]
 
 OUTPUT_NON_NULL_COLUMNS = [
-    column_name for column_name in OUTPUT_COLUMNS if column_name != "pma_sso_pct_of_underlying"
+    *OUTPUT_COLUMNS,
 ]
 
 GROUP_COLUMNS = [
-    "fc_run_year",
-    "version",
     "fc_object_id",
-    "segment",
+    "lga_segment",
+    "scenario",
     "fcy",
-    "forecast_scenario",
-    "poe",
-    "representative_day",
     "season",
     "day_type",
+    "representative_day",
 ]
 
 OUTPUT_SCHEMA = StructType(
     [
-        StructField("fc_run_year", IntegerType(), False),
-        StructField("version", StringType(), False),
         StructField("fc_object_id", IntegerType(), False),
-        StructField("segment", StringType(), True),
+        StructField("lga_segment", StringType(), False),
+        StructField("scenario", StringType(), False),
         StructField("fcy", IntegerType(), False),
-        StructField("forecast_scenario", StringType(), False),
-        StructField("poe", StringType(), False),
-        StructField("representative_day", StringType(), False),
         StructField("season", StringType(), False),
         StructField("day_type", StringType(), False),
+        StructField("representative_day", StringType(), False),
         StructField("interval", IntegerType(), False),
-        StructField("pma_sso_mw", DoubleType(), False),
-        StructField("pma_sso_pct_of_underlying", DoubleType(), True),
+        StructField("delta_mw", DoubleType(), False),
     ]
 )
 

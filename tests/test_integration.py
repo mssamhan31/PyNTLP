@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import copy
 
-from pyntlp import build_segment_metrics, compute_pma_sso, load_params, validate_pma
+from pyntlp import build_lga_segment_metrics, compute_pma_sso, load_params, validate_pma
 
 
 def test_end_to_end_package_flow_runs_on_normalised_data(spark, base_params):
@@ -10,32 +10,29 @@ def test_end_to_end_package_flow_runs_on_normalised_data(spark, base_params):
 
     baseline_profiles_df = spark.createDataFrame(
         [
-            (2026, "v1", 1001, "Residential", 2026, "base", "POE50", "weekday", "summer", "business", 1, 1.0),
-            (2026, "v1", 1001, "Residential", 2026, "base", "POE50", "weekday", "summer", "business", 2, 1.0),
-            (2026, "v1", 1001, "Residential", 2026, "base", "POE50", "weekday", "summer", "business", 3, 1.0),
-            (2026, "v1", 1001, "Residential", 2026, "base", "POE50", "weekday", "summer", "business", 4, 1.0),
+            (1001, "Central Coast (NSW)_Large Res - NoOP - No_DER", "base", 2026, "summer", "business", "weekday", 1, 1.0),
+            (1001, "Central Coast (NSW)_Large Res - NoOP - No_DER", "base", 2026, "summer", "business", "weekday", 2, 1.0),
+            (1001, "Central Coast (NSW)_Large Res - NoOP - No_DER", "base", 2026, "summer", "business", "weekday", 3, 1.0),
+            (1001, "Central Coast (NSW)_Large Res - NoOP - No_DER", "base", 2026, "summer", "business", "weekday", 4, 1.0),
         ],
         [
-            "fc_run_year",
-            "version",
             "fc_object_id",
-            "segment",
+            "lga_segment",
+            "scenario",
             "fcy",
-            "forecast_scenario",
-            "poe",
-            "representative_day",
             "season",
             "day_type",
+            "representative_day",
             "interval",
-            "underlying_demand_mw",
+            "baseline_demand_mw",
         ],
     )
-    segment_attributes_df = spark.createDataFrame(
+    lga_segment_attributes_df = spark.createDataFrame(
         [
-            ("nmi-1", "Residential", "No_DER"),
-            ("nmi-2", "Residential", "No_DER"),
+            ("nmi-1", "Central Coast (NSW)_Large Res - NoOP - No_DER"),
+            ("nmi-2", "Central Coast (NSW)_Large Res - NoOP - No_DER"),
         ],
-        ["nmi", "segment", "der_type"],
+        ["nmi", "lga_segment"],
     )
     smart_meter_df = spark.createDataFrame(
         [
@@ -45,24 +42,20 @@ def test_end_to_end_package_flow_runs_on_normalised_data(spark, base_params):
         ["nmi", "meter_type_code"],
     )
 
-    segment_metrics_df = build_segment_metrics(segment_attributes_df, smart_meter_df, params)
-    pma_delta_df = compute_pma_sso(baseline_profiles_df, segment_metrics_df, params)
+    lga_segment_metrics_df = build_lga_segment_metrics(lga_segment_attributes_df, smart_meter_df, params)
+    pma_delta_df = compute_pma_sso(baseline_profiles_df, lga_segment_metrics_df, params)
     validation_report_df = validate_pma(pma_delta_df, params)
 
     assert pma_delta_df.count() == 4
     assert pma_delta_df.columns == [
-        "fc_run_year",
-        "version",
         "fc_object_id",
-        "segment",
+        "lga_segment",
+        "scenario",
         "fcy",
-        "forecast_scenario",
-        "poe",
-        "representative_day",
         "season",
         "day_type",
+        "representative_day",
         "interval",
-        "pma_sso_mw",
-        "pma_sso_pct_of_underlying",
+        "delta_mw",
     ]
     assert {row["status"] for row in validation_report_df.collect()} == {"PASS"}

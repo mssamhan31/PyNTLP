@@ -1,4 +1,4 @@
-"""Shared helpers for validation and segment parameter resolution."""
+"""Shared helpers for validation and lga_segment parameter resolution."""
 
 from __future__ import annotations
 
@@ -30,22 +30,22 @@ def normalise_string_column(column: Column) -> Column:
     return F.upper(F.trim(F.coalesce(column.cast("string"), F.lit(""))))
 
 
-def resolve_segment_parameter(segment: str | None, mapping: dict[str, float], default_value: float) -> float:
-    """Resolve an exact-match segment override with fallback to default."""
+def resolve_lga_segment_parameter(lga_segment: str | None, mapping: dict[str, float], default_value: float) -> float:
+    """Resolve an exact-match lga_segment override with fallback to default."""
 
-    if segment is None:
+    if lga_segment is None:
         return float(mapping.get("default", default_value))
-    if segment in mapping:
-        return float(mapping[segment])
+    if lga_segment in mapping:
+        return float(mapping[lga_segment])
     return float(mapping.get("default", default_value))
 
 
-def segment_parameter_expr(segment_column: Column, mapping: dict[str, float], default_value: float) -> Column:
-    """Build a Spark expression for exact-match segment overrides."""
+def lga_segment_parameter_expr(lga_segment_column: Column, mapping: dict[str, float], default_value: float) -> Column:
+    """Build a Spark expression for exact-match lga_segment overrides."""
 
     expr = F.lit(float(mapping.get("default", default_value)))
-    for segment_name, value in mapping.items():
-        if segment_name == "default":
+    for lga_segment, value in mapping.items():
+        if lga_segment == "default":
             continue
-        expr = F.when(segment_column == F.lit(segment_name), F.lit(float(value))).otherwise(expr)
+        expr = F.when(lga_segment_column == F.lit(lga_segment), F.lit(float(value))).otherwise(expr)
     return expr

@@ -1,129 +1,51 @@
 # Model Overview
 
-This page describes how the v0.1 `pyntlp` model works.
+The model converts SSO policy settings into additive interval PMA deltas named `delta_mw`.
 
-## Scope
+The model grain is `lga_segment`. The same string is used for:
 
-The model converts an SSO policy definition into additive interval PMA outputs named `pma_sso_mw` and `pma_sso_pct_of_underlying`.
+- joining baseline profiles to NMI-derived eligibility metrics
+- residential eligibility pattern matching
+- DER group suffix inference
+- optional `s_lga_segment` shiftable-load overrides
 
-The model does not:
+## Eligibility Metrics
 
-- write output tables
-- manage environment-specific configuration
-- combine the PMA delta with baseline demand
+`build_lga_segment_metrics(...)` uses:
 
-## Step 1: Segment Eligibility
+- `nmi`
+- `lga_segment`
+- smart-meter status from `meter_type_code`
 
-`build_segment_metrics(...)` computes segment-level eligibility using:
+Residential eligibility is matched against the full `lga_segment` string. DER group is inferred from the `lga_segment` suffix:
 
-- residential segment matching from `eligible_resi_patterns`
-- smart-meter matching from `smart_meter_code`
-- DER-type cohort matching from `eligible_der_groups`
+- `No_DER`
+- `Solar`
+- `Solar_Battery`
 
-For each segment, the package computes:
+## PMA Calculation
 
-- `n_total`
-- `n_eligible`
-- `eligibility_rate = n_eligible / n_total`
-- `n_eligible_no_der`
-- `n_eligible_solar`
-- `n_eligible_solar_battery`
-- `eligibility_rate_no_der`
-- `eligibility_rate_solar`
-- `eligibility_rate_solar_battery`
+For each `lga_segment` and profile group:
 
-Rules:
+```text
+daily_energy_mwh = sum(baseline_demand_mw * interval_hours)
+eligible_uptake_rate = weighted DER eligibility rate
+adoption_rate = eligible_uptake_rate * ramp_rate
+e_shift_mwh = daily_energy_mwh * s_lga_segment * k_response * adoption_rate
+```
 
-- all three eligible cohorts still require a residential segment match and a smart meter
-- one NMI cannot contribute to more than one DER cohort
+Shifted energy is capped by participant count and `cap_kwh_per_day`, allocated into the free window, and removed from donor intervals so the group is energy-neutral.
 
-## Step 2: Adoption Ramp
+## Output
 
-Inside `compute_pma_sso(...)`, adoption is calculated by segment and FCY as:
+The output table is:
 
-`adoption_rate = weighted_eligibility_uptake * ramp(fcy)`
-
-Where:
-
-- `weighted_eligibility_uptake = eligibility_rate_no_der * u(No_DER) + eligibility_rate_solar * u(Solar) + eligibility_rate_solar_battery * u(Solar_Battery)`
-- `ramp(fcy)` is a linear rollout from `ramp_start_fcy` to `ramp_full_fcy`
-
-Ramp rules:
-
-- `0` before the start year
-- `1` at or after the full-rollout year
-- linear interpolation between those years
-
-## Step 3: Daily Shift Energy
-
-For each baseline group, the package first computes daily baseline energy:
-
-`E_day = sum(underlying_demand_mw * interval_hours)`
-
-Then it computes uncapped shift energy:
-
-`E_shift = E_day * s(segment) * k_response * adoption_rate`
-
-Where:
-
-- `s(segment)` is the segment shiftable share
-- `k_response` is the behavioural response multiplier
-
-## Step 4: Participant Cap
-
-Participants are estimated as:
-
-`participants = n_total * adoption_rate`
-
-Then the daily cap is applied:
-
-- `E_cap_total = participants * cap_kwh_per_day / 1000`
-- `E_shift_capped = min(E_shift, E_cap_total)`
-
-## Step 5: Interval Allocation
-
-The v0.1 model uses a flat allocation on both sides:
-
-- flat uplift inside the configured free window
-- flat donor reduction across the configured donor intervals
-
-Window convention:
-
-- start-inclusive
-- end-exclusive
-- interval numbering is 1-based
-- overnight windows are supported
-
-Donor-window convention:
-
-- if `donor_window_start` and `donor_window_end` are omitted, donor intervals are the complement of the free window
-- if an explicit donor window is supplied, only those donor intervals are reduced
-- intervals outside both the free window and the explicit donor window stay at zero
-- donor windows must not overlap the free window
-
-The model converts allocated interval energy into MW by dividing by `interval_hours`.
-
-It also derives an interval percentage output:
-
-- `pma_sso_pct_of_underlying = 100 * pma_sso_mw / underlying_demand_mw`
-- when `underlying_demand_mw` is zero, the percentage output is `null`
-
-## Step 6: Energy Neutrality
-
-The PMA profile is intended to be energy-neutral within each baseline group:
-
-- in-window uplift equals donor-window reduction
-- group-level neutrality is checked by `validate_pma(...)`
-
-## Current v0.1 Simplifications
-
-The current public MVP intentionally keeps the model narrow:
-
-- no season-specific behaviour adjustments
-- no day-type-specific behaviour adjustments
-- no representative-day-specific behaviour adjustments
-- no rebound allocation logic
-- only `flat` window and donor shapes
-- only `energy_neutral` accounting
-
-Those fields may exist in the YAML contract for future tiers, but they are not active in the v0.1 engine.
+- `fc_object_id`
+- `lga_segment`
+- `scenario`
+- `fcy`
+- `season`
+- `day_type`
+- `representative_day`
+- `interval`
+- `delta_mw`

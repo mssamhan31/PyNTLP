@@ -23,7 +23,7 @@ def test_load_params_from_yaml_path(tmp_path, base_params):
     params = load_params(params_path)
 
     assert params["parameters"]["window_start"] == "01:00"
-    assert params["constants"]["segment_column"] == "segment"
+    assert params["parameters"]["s_lga_segment"]["default"] == 0.25
 
 
 def test_load_params_fails_fast_for_missing_required_key(base_params):
@@ -44,7 +44,21 @@ def test_load_params_rejects_partial_donor_window(base_params):
 
 def test_load_params_rejects_duplicate_der_group_mapping(base_params):
     invalid_params = copy.deepcopy(base_params)
-    invalid_params["parameters"]["eligible_der_groups"]["Solar"] = ["No_DER"]
+    invalid_params["parameters"]["eligible_der_groups"] = {
+        "No_DER": ["No_DER"],
+        "Solar": ["No_DER"],
+        "Solar_Battery": ["Solar_Battery"],
+    }
 
-    with pytest.raises(ValueError, match="eligible_der_groups"):
+    with pytest.raises(ValueError, match="removed keys"):
+        load_params(invalid_params)
+
+
+def test_load_params_rejects_removed_segment_keys(base_params):
+    invalid_params = copy.deepcopy(base_params)
+    invalid_params["constants"]["segment_column"] = "segment"
+    invalid_params["constants"]["output_value_column"] = "pma_sso_mw"
+    invalid_params["parameters"]["s_segment"] = {"default": 0.25}
+
+    with pytest.raises(ValueError, match="removed keys"):
         load_params(invalid_params)

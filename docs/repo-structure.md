@@ -20,8 +20,8 @@ The package code lives under `src/pyntlp/`.
 - `__init__.py`: public exports for the package API.
 - `params.py`: YAML and dictionary parameter loading plus contract validation.
 - `windows.py`: interval-window utilities, including start-inclusive and end-exclusive window mapping.
-- `metrics.py`: segment-level eligibility calculations from normalised customer inputs.
-- `model.py`: PMA SSO computation logic that turns baseline demand and segment metrics into interval deltas.
+- `metrics.py`: lga_segment-level eligibility calculations from normalised customer inputs.
+- `model.py`: PMA SSO computation logic that turns baseline demand and lga_segment metrics into interval deltas.
 - `validation.py`: output schema and energy-neutrality checks.
 - `schema.py`: shared schema definitions and canonical column lists.
 - `utils.py`: shared helper functions used across modules.
