@@ -44,6 +44,10 @@ OUTPUT_METRIC_COLUMNS = [
     "delta_mw",
 ]
 
+OUTPUT_ATTRIBUTE_COLUMNS = [
+    "customer_type",
+]
+
 OUTPUT_COLUMNS = [
     "fc_object_id",
     "lga_segment",
@@ -63,28 +67,23 @@ OUTPUT_KEY_COLUMNS = [
     column_name for column_name in OUTPUT_COLUMNS if column_name not in OUTPUT_METRIC_COLUMNS
 ]
 
+MODEL_INTERVAL_KEY_COLUMNS = [
+    column_name for column_name in OUTPUT_KEY_COLUMNS if column_name not in OUTPUT_ATTRIBUTE_COLUMNS
+]
+
 OUTPUT_NON_NULL_COLUMNS = [
-    *OUTPUT_COLUMNS,
+    column_name for column_name in OUTPUT_COLUMNS if column_name not in OUTPUT_ATTRIBUTE_COLUMNS
 ]
 
 GROUP_COLUMNS = [
-    "fc_object_id",
-    "lga_segment",
-    "customer_type",
-    "fcy",
-    "forecast_scenario",
-    "season",
-    "day_type",
-    "representative_day",
-    "coincident_type",
-    "poe",
+    column_name for column_name in MODEL_INTERVAL_KEY_COLUMNS if column_name != "interval"
 ]
 
 OUTPUT_SCHEMA = StructType(
     [
         StructField("fc_object_id", IntegerType(), False),
         StructField("lga_segment", StringType(), False),
-        StructField("customer_type", StringType(), False),
+        StructField("customer_type", StringType(), True),
         StructField("fcy", IntegerType(), False),
         StructField("forecast_scenario", StringType(), False),
         StructField("season", StringType(), False),

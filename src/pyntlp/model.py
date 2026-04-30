@@ -9,8 +9,8 @@ from .schema import (
     BASELINE_REQUIRED_COLUMNS,
     GROUP_COLUMNS,
     LGA_SEGMENT_METRICS_REQUIRED_COLUMNS,
+    MODEL_INTERVAL_KEY_COLUMNS,
     OUTPUT_COLUMNS,
-    OUTPUT_KEY_COLUMNS,
 )
 from .utils import ensure_no_duplicate_keys, ensure_required_columns, lga_segment_parameter_expr
 from .windows import get_window_intervals
@@ -58,7 +58,7 @@ def compute_pma_sso(
         F.col("interval").cast("int").alias("interval"),
         F.col("baseline_demand_mw").cast("double").alias("baseline_demand_mw"),
     )
-    ensure_no_duplicate_keys(baseline, OUTPUT_KEY_COLUMNS, "baseline_profiles_df")
+    ensure_no_duplicate_keys(baseline, MODEL_INTERVAL_KEY_COLUMNS, "baseline_profiles_df")
 
     lga_segment_metrics = (
         lga_segment_metrics_df.select(

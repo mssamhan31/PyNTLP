@@ -50,6 +50,9 @@ Baseline profiles:
 - `interval`
 - `baseline_demand_mw`
 
+`customer_type` is required by presence so the output can mirror the baseline
+table shape, but its value may be null. It is not a model dimension.
+
 NMI attributes:
 
 - `nmi`
@@ -76,6 +79,11 @@ Smart meter attributes:
 - `poe`
 - `interval`
 - `delta_mw`
+
+The model key excludes `customer_type`. Duplicate baseline rows are rejected
+when they share the same `fc_object_id`, `lga_segment`, `fcy`,
+`forecast_scenario`, `season`, `day_type`, `representative_day`,
+`coincident_type`, `poe`, and `interval`, even if `customer_type` differs.
 
 ## Classification
 

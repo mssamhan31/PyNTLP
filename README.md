@@ -8,6 +8,11 @@ The FC2026 public contract mirrors the baseline table shape:
 - NMI attributes use only `nmi` and `lga_segment`
 - PMA output uses the same dimensions, replacing `baseline_demand_mw` with `delta_mw`
 
+`customer_type` is an output attribute only. It must be present in the
+baseline input so it can be carried to the PMA output, but it may be null and
+is not used for eligibility, adoption, energy-neutrality grouping, or delta
+allocation.
+
 ## API
 
 ```python

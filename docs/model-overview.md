@@ -36,6 +36,12 @@ e_shift_mwh = daily_energy_mwh * s_lga_segment * k_response * adoption_rate
 
 Shifted energy is capped by participant count and `cap_kwh_per_day`, allocated into the free window, and removed from donor intervals so the group is energy-neutral.
 
+The model group includes `fc_object_id`, `lga_segment`, `fcy`,
+`forecast_scenario`, `season`, `day_type`, `representative_day`,
+`coincident_type`, and `poe`. `customer_type` is carried to the output as an
+attribute only; it may be null and does not change eligibility, adoption,
+energy, or allocation logic.
+
 ## Output
 
 The output table is:

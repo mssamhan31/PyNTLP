@@ -233,12 +233,38 @@ def test_compute_pma_sso_preserves_baseline_shape_dimensions(spark, base_params)
     assert validation_status["group_energy_neutrality"] == "PASS"
 
 
-def test_compute_pma_sso_rejects_duplicate_expanded_keys(spark, base_params):
+def test_compute_pma_sso_allows_null_customer_type_as_output_attribute(spark, base_params):
+    params = load_params(copy.deepcopy(base_params))
+    baseline_profiles_df = spark.createDataFrame(
+        [
+            (1001, LGA_SEGMENT, None, 2026, "base", "summer", "business", "weekday", "local non-coincident", "poe50", 1, 1.0),
+            (1001, LGA_SEGMENT, "Residential", 2026, "base", "summer", "business", "weekday", "local non-coincident", "poe50", 2, 1.0),
+            (1001, LGA_SEGMENT, "Residential", 2026, "base", "summer", "business", "weekday", "local non-coincident", "poe50", 3, 1.0),
+            (1001, LGA_SEGMENT, "Residential", 2026, "base", "summer", "business", "weekday", "local non-coincident", "poe50", 4, 1.0),
+        ],
+        BASELINE_COLUMNS,
+    )
+
+    pma_delta_df = compute_pma_sso(
+        baseline_profiles_df=baseline_profiles_df,
+        lga_segment_metrics_df=_lga_segment_metrics_df(spark, n_total=10, n_eligible_no_der=10),
+        params=params,
+    )
+
+    assert pma_delta_df.where("customer_type IS NULL").count() == 1
+    validation_status = {
+        row["check_name"]: row["status"] for row in validate_pma(pma_delta_df, params).collect()
+    }
+    assert validation_status["required_columns_non_null"] == "PASS"
+    assert validation_status["group_energy_neutrality"] == "PASS"
+
+
+def test_compute_pma_sso_rejects_duplicate_model_interval_keys(spark, base_params):
     params = load_params(copy.deepcopy(base_params))
     baseline_profiles_df = spark.createDataFrame(
         [
             (1001, LGA_SEGMENT, "Residential", 2026, "base", "summer", "business", "weekday", "local non-coincident", "poe50", 1, 1.0),
-            (1001, LGA_SEGMENT, "Residential", 2026, "base", "summer", "business", "weekday", "local non-coincident", "poe50", 1, 2.0),
+            (1001, LGA_SEGMENT, "Small Business", 2026, "base", "summer", "business", "weekday", "local non-coincident", "poe50", 1, 2.0),
         ],
         BASELINE_COLUMNS,
     )
