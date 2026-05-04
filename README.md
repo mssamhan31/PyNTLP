@@ -33,6 +33,40 @@ vehicle charging, or other flexible loads into the Solar Sharer window.
 For planning and analysis, this means the original load profile needs to be
 adjusted. PyNTLP helps estimate that adjustment.
 
+## Current SSO Design Details
+
+This summary reflects public Australian Government and Australian Energy
+Regulator material available in May 2026. Check the official sources below
+before using these details for customer-facing, regulatory, or commercial work.
+
+The Solar Sharer Offer is planned to start on **1 July 2026** in areas covered
+by the Default Market Offer.
+
+Initial availability is for households in:
+
+- New South Wales
+- South Australia
+- South East Queensland
+
+It is not an Australia-wide offer at launch. In particular, "Queensland" here
+means South East Queensland, not the whole state. Public government material
+also says consideration is being given to making an SSO, or equivalent option,
+available in other areas.
+
+The free electricity window is expected to be:
+
+- **11:00 am to 2:00 pm** in New South Wales
+- **11:00 am to 2:00 pm** in South East Queensland
+- **12:00 pm to 3:00 pm** in South Australia
+
+The offer is designed as an opt-in tariff for households with smart meters.
+Government material says it is intended to be available to households with or
+without rooftop solar, and to both renters and homeowners.
+
+The public design also includes a reasonable-use cap. Government material
+describes this as access to up to **24 kWh** of free electricity during the
+daily free-power window.
+
 ## Why This Tool Exists
 
 Tariff design can influence when customers use electricity. Network planners,
@@ -65,6 +99,10 @@ At a high level, PyNTLP:
 
 The current SSO implementation focuses on daily load shifting into the Solar
 Sharer window while keeping the modelled daily energy balanced.
+
+For the current public SSO settings, this means PyNTLP models load that may move
+into the free daytime period, especially **11:00 am to 2:00 pm** in New South
+Wales and South East Queensland.
 
 ## What PyNTLP Is Not
 
@@ -119,6 +157,16 @@ For more detail, start with the [docs index](docs/README.md), or go directly to:
 - [Troubleshooting](docs/troubleshooting.md)
 - [Development notes](docs/development.md)
 - [Repository structure](docs/repo-structure.md)
+
+## References
+
+Official sources for the public SSO description:
+
+- [DCCEEW: Solar Sharer Offer to help cut electricity bills](https://www.dcceew.gov.au/about/news/solar-sharer-offer-help-cut-electricity-bills)
+- [DCCEEW: Default Market Offer](https://www.dcceew.gov.au/energy/programs/default-market-offer)
+- [AER: Default Market Offer 2026-27 review](https://www.aer.gov.au/industry/registers/resources/reviews/default-market-offer-2026-27)
+- [AER: Draft Default Market Offer 2026-27 news release](https://www.aer.gov.au/news/articles/news-releases/aer-releases-draft-default-market-offer-2026-27)
+- [AER: Solar Sharer Offer fact sheet for retailers](https://www.aer.gov.au/system/files/2026-03/Solar%20Sharer%20Offer%20-%20Fact%20Sheet%20for%20Retailers%20March%202026.pdf)
 
 ## For Developers
 
