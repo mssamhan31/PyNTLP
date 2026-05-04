@@ -1,6 +1,14 @@
 # Repo Structure
 
+## Executive Summary
+
 This page explains the purpose of the main files and folders in the repository.
+`pyntlp` uses a `src/` package layout so reusable model code stays separate from
+tests, planning material, and documentation.
+
+There is no active Databricks notebook wrapper in this package. Production or
+project-specific notebooks should live outside `pyntlp` and import the package
+API instead of embedding package logic.
 
 ## Top Level
 
