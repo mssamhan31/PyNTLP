@@ -112,6 +112,7 @@ def _lga_segment_metrics_df(
     n_eligible_no_der=0,
     n_eligible_solar=0,
     n_eligible_solar_battery=0,
+    lga_segment=LGA_SEGMENT,
 ):
     n_eligible = n_eligible_no_der + n_eligible_solar + n_eligible_solar_battery
     eligibility_rate = n_eligible / n_total if n_total else 0.0
@@ -122,7 +123,7 @@ def _lga_segment_metrics_df(
     return spark.createDataFrame(
         [
             (
-                LGA_SEGMENT,
+                lga_segment,
                 n_total,
                 n_eligible,
                 eligibility_rate,
@@ -298,12 +299,88 @@ def test_compute_pma_sso_respects_cap_binding(spark, base_params):
     assert isclose(deltas[4], -0.25, rel_tol=0.0, abs_tol=1e-12)
 
 
+def test_compute_pma_sso_shares_lga_segment_cap_across_fc_objects(spark, base_params):
+    capped_params = copy.deepcopy(base_params)
+    capped_params["parameters"]["cap_kwh_per_day"] = 500.0
+    capped_params["parameters"]["s_lga_segment"][LGA_SEGMENT] = 1.0
+    capped_params["parameters"]["s_lga_segment"]["default"] = 1.0
+    params = load_params(capped_params)
+
+    baseline_rows = []
+    for fc_object_id in (1001, 1002):
+        for interval in (1, 2, 3, 4):
+            baseline_rows.append(
+                (
+                    fc_object_id,
+                    LGA_SEGMENT,
+                    "Residential",
+                    2026,
+                    "base",
+                    "summer",
+                    "business",
+                    "weekday",
+                    "local non-coincident",
+                    "poe50",
+                    interval,
+                    1.0,
+                )
+            )
+    baseline_profiles_df = spark.createDataFrame(baseline_rows, BASELINE_COLUMNS)
+
+    pma_delta_df = compute_pma_sso(
+        baseline_profiles_df=baseline_profiles_df,
+        lga_segment_metrics_df=_lga_segment_metrics_df(spark, n_total=1, n_eligible_no_der=1),
+        params=params,
+    )
+
+    deltas = {
+        (row["fc_object_id"], row["interval"]): row["delta_mw"]
+        for row in pma_delta_df.collect()
+    }
+
+    for fc_object_id in (1001, 1002):
+        assert isclose(deltas[(fc_object_id, 2)], 0.125, rel_tol=0.0, abs_tol=1e-12)
+        assert isclose(deltas[(fc_object_id, 3)], 0.125, rel_tol=0.0, abs_tol=1e-12)
+        assert isclose(deltas[(fc_object_id, 1)], -0.125, rel_tol=0.0, abs_tol=1e-12)
+        assert isclose(deltas[(fc_object_id, 4)], -0.125, rel_tol=0.0, abs_tol=1e-12)
+
+    total_window_mwh = sum(
+        row["delta_mw"]
+        for row in pma_delta_df.where("interval IN (2, 3)").collect()
+    )
+    assert isclose(total_window_mwh, 0.5, rel_tol=0.0, abs_tol=1e-12)
+
+    validation_status = {
+        row["check_name"]: row["status"] for row in validate_pma(pma_delta_df, params).collect()
+    }
+    assert validation_status["group_energy_neutrality"] == "PASS"
+
+
 def test_compute_pma_sso_returns_zero_for_ineligible_lga_segments(spark, base_params):
     params = load_params(copy.deepcopy(base_params))
 
     pma_delta_df = compute_pma_sso(
         baseline_profiles_df=_baseline_profiles_df(spark),
         lga_segment_metrics_df=_lga_segment_metrics_df(spark, n_total=10),
+        params=params,
+    )
+
+    deltas = [row["delta_mw"] for row in pma_delta_df.collect()]
+
+    assert all(isclose(delta, 0.0, rel_tol=0.0, abs_tol=1e-12) for delta in deltas)
+
+
+def test_compute_pma_sso_returns_zero_for_missing_lga_segment_metrics(spark, base_params):
+    params = load_params(copy.deepcopy(base_params))
+
+    pma_delta_df = compute_pma_sso(
+        baseline_profiles_df=_baseline_profiles_df(spark),
+        lga_segment_metrics_df=_lga_segment_metrics_df(
+            spark,
+            n_total=10,
+            n_eligible_no_der=10,
+            lga_segment="Different LGA_Large Res - NoOP - No_DER",
+        ),
         params=params,
     )
 

@@ -1,4 +1,9 @@
-"""Public package exports for pyntlp."""
+"""Public package exports for pyntlp.
+
+Importing from `pyntlp` exposes the stable functions used by notebooks and
+pipeline wrappers: parameter loading, eligibility metrics, PMA computation,
+validation, and window utilities.
+"""
 
 from .metrics import build_lga_segment_metrics
 from .model import compute_pma_sso

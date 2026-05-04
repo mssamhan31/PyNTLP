@@ -1,4 +1,9 @@
-"""Time-window utilities for mapping policy windows onto intervals."""
+"""Time-window utilities for mapping policy windows onto intervals.
+
+Window boundaries use start-inclusive and end-exclusive HH:MM clock times. The
+helpers convert those clock windows into one-based interval numbers used by the
+Spark model and validation code.
+"""
 
 from __future__ import annotations
 
@@ -8,7 +13,12 @@ TIME_PATTERN = re.compile(r"^([01]\d|2[0-3]):([0-5]\d)$")
 
 
 def get_window_intervals(params: dict) -> tuple[list[int], list[int], float]:
-    """Return window intervals, donor intervals, and interval hours."""
+    """Return policy-window intervals, donor intervals, and interval hours.
+
+    If no explicit donor window is configured, every interval outside the policy
+    window becomes a donor interval. Explicit donor windows may wrap overnight
+    but must not overlap the policy window.
+    """
 
     constants = params["constants"]
     parameters = params["parameters"]
@@ -58,6 +68,8 @@ def get_window_intervals(params: dict) -> tuple[list[int], list[int], float]:
 
 
 def _parse_clock_time(clock_time: str) -> int:
+    """Convert an HH:MM clock value into minutes after midnight."""
+
     match = TIME_PATTERN.match(clock_time)
     if match is None:
         raise ValueError(f"Clock time must use HH:MM 24-hour format: {clock_time}")
@@ -72,6 +84,8 @@ def _interval_start_in_window(
     window_start_minutes: int,
     window_end_minutes: int,
 ) -> bool:
+    """Return whether an interval start falls inside a clock window."""
+
     interval_start_minutes = (interval_index - 1) * interval_minutes
 
     if window_start_minutes < window_end_minutes:
@@ -89,6 +103,8 @@ def _build_interval_set(
     start_key: str | None = None,
     end_key: str | None = None,
 ) -> set[int]:
+    """Build a set of one-based interval indexes covered by a clock window."""
+
     window_start_minutes = _parse_clock_time(window_start)
     window_end_minutes = _parse_clock_time(window_end)
     start_key = start_key or f"{window_label}_start"

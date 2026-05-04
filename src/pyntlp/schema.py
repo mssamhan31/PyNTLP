@@ -1,4 +1,9 @@
-"""Shared schema definitions for public package contracts."""
+"""Shared schema definitions for public package contracts.
+
+These constants are the single source of truth for required input columns,
+model grouping columns, output ordering, and validation report structure.
+Keeping them centralised makes notebook wrappers and tests easier to compare.
+"""
 
 from pyspark.sql.types import DoubleType, IntegerType, StringType, StructField, StructType
 
@@ -17,6 +22,7 @@ BASELINE_REQUIRED_COLUMNS = [
     "baseline_demand_mw",
 ]
 
+# Source contracts used before PMA computation.
 LGA_SEGMENT_ATTRIBUTES_REQUIRED_COLUMNS = [
     "nmi",
     "lga_segment",
@@ -27,6 +33,8 @@ SMART_METER_REQUIRED_COLUMNS = [
     "meter_type_code",
 ]
 
+# Metrics contract produced by `build_lga_segment_metrics` and consumed by
+# `compute_pma_sso`.
 LGA_SEGMENT_METRICS_REQUIRED_COLUMNS = [
     "lga_segment",
     "n_total",
@@ -40,6 +48,8 @@ LGA_SEGMENT_METRICS_REQUIRED_COLUMNS = [
     "eligibility_rate_solar_battery",
 ]
 
+# Output contracts are ordered deliberately to mirror the baseline dimensions
+# while replacing baseline demand with additive PMA deltas.
 OUTPUT_METRIC_COLUMNS = [
     "delta_mw",
 ]
@@ -79,6 +89,7 @@ GROUP_COLUMNS = [
     column_name for column_name in MODEL_INTERVAL_KEY_COLUMNS if column_name != "interval"
 ]
 
+# Spark schemas are used by validation reports and exact output contract checks.
 OUTPUT_SCHEMA = StructType(
     [
         StructField("fc_object_id", IntegerType(), False),

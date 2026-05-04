@@ -1,4 +1,9 @@
-"""LGA-segment eligibility metrics derived from normalised inputs."""
+"""LGA-segment eligibility metrics derived from normalised inputs.
+
+This module prepares the segment-level eligibility rates that feed the PMA SSO
+model. It combines NMI-to-lga_segment attributes with smart-meter flags and
+derives DER-group-specific eligibility rates from the lga_segment suffix.
+"""
 
 from __future__ import annotations
 
@@ -20,7 +25,13 @@ def build_lga_segment_metrics(
     smart_meter_df: DataFrame,
     params: dict,
 ) -> DataFrame:
-    """Compute lga_segment-level eligibility rates from normalised inputs."""
+    """Compute lga_segment-level eligibility rates from normalised inputs.
+
+    Each output row represents one lga_segment with total NMI counts, eligible
+    NMI counts, and eligibility rates for No_DER, Solar, and Solar_Battery
+    groups. Inputs are deduplicated by NMI where needed so repeated source rows
+    do not inflate eligibility counts.
+    """
 
     ensure_required_columns(
         lga_segment_attributes_df,
@@ -32,6 +43,8 @@ def build_lga_segment_metrics(
     eligible_resi_patterns = params["parameters"]["eligible_resi_patterns"]
     smart_meter_code = normalise_token(params["parameters"]["smart_meter_code"])
 
+    # Normalise the attribute feed to distinct NMI/lga_segment pairs before
+    # inferring DER groups from the segment name.
     attrs = (
         lga_segment_attributes_df.select(
             F.trim(F.col("nmi").cast("string")).alias("nmi"),
@@ -42,6 +55,8 @@ def build_lga_segment_metrics(
     )
 
     normalised_lga_segment = normalise_string_column(F.col("lga_segment"))
+    # DER group flags are inferred from lga_segment suffixes. The conflict check
+    # below keeps a single NMI from contributing to multiple DER groups.
     attrs_with_group_flags = attrs.select(
         "lga_segment",
         "nmi",
@@ -62,6 +77,8 @@ def build_lga_segment_metrics(
         ]
     )
 
+    # Smart-meter eligibility is reduced to one flag per NMI so duplicate meter
+    # rows cannot multiply the joined attribute rows.
     meter_flags = (
         smart_meter_df.select(
             F.trim(F.col("nmi").cast("string")).alias("nmi"),
@@ -82,6 +99,7 @@ def build_lga_segment_metrics(
     residential_pattern = "|".join(f"(?:{pattern.lower()})" for pattern in eligible_resi_patterns)
     residential_flag = F.lower(F.coalesce(F.col("lga_segment"), F.lit(""))).rlike(residential_pattern)
 
+    # Aggregate to the public lga_segment metrics contract consumed by model.py.
     metrics = (
         attr_flags.join(meter_flags, on="nmi", how="left")
         .fillna({"has_smart_meter": 0})
@@ -145,6 +163,8 @@ def build_lga_segment_metrics(
 
 
 def _raise_if_nmi_maps_to_multiple_der_groups(attrs_with_group_flags: DataFrame) -> None:
+    """Raise if a single NMI is inferred into more than one DER group."""
+
     group_columns = [f"is_{suffix}" for suffix in DER_GROUP_SUFFIXES.values()]
     matched_group_count_expr = F.lit(0)
     for column_name in group_columns:
