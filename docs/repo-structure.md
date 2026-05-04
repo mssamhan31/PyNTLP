@@ -21,6 +21,20 @@ API instead of embedding package logic.
 - `src/`: installable Python package source.
 - `tests/`: unit and integration-style tests.
 
+## Documentation
+
+The docs folder is the technical manual for the package.
+
+- `README.md`: documentation index and recommended reading order.
+- `glossary.md`: definitions for tariff, load-profile, and package terms.
+- `assumptions-and-limitations.md`: current model scope, assumptions, and interpretation limits.
+- `usage-guide.md`: practical workflow for calling the package from a job, notebook, or pipeline.
+- `model-overview.md`: detailed explanation of the SSO calculation and modelling grain.
+- `api-contracts.md`: public function, input, output, and validation contracts.
+- `troubleshooting.md`: common symptoms, likely causes, and checks.
+- `development.md`: setup, tests, review checklist, and contribution notes.
+- `repo-structure.md`: this repository map.
+
 ## Package Source
 
 The package code lives under `src/pyntlp/`.
