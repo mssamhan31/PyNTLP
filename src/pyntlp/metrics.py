@@ -1,11 +1,16 @@
-"""Segment-level eligibility metrics derived from normalised inputs."""
+"""LGA-segment eligibility metrics derived from normalised inputs.
+
+This module prepares the segment-level eligibility rates that feed the PMA SSO
+model. It combines NMI-to-lga_segment attributes with smart-meter flags and
+derives DER-group-specific eligibility rates from the lga_segment suffix.
+"""
 
 from __future__ import annotations
 
 from pyspark.sql import DataFrame
 from pyspark.sql import functions as F
 
-from .schema import SMART_METER_REQUIRED_COLUMNS
+from .schema import LGA_SEGMENT_ATTRIBUTES_REQUIRED_COLUMNS, SMART_METER_REQUIRED_COLUMNS
 from .utils import ensure_required_columns, normalise_string_column, normalise_token
 
 DER_GROUP_SUFFIXES = {
@@ -15,59 +20,65 @@ DER_GROUP_SUFFIXES = {
 }
 
 
-def build_segment_metrics(
-    segment_attributes_df: DataFrame,
+def build_lga_segment_metrics(
+    lga_segment_attributes_df: DataFrame,
     smart_meter_df: DataFrame,
     params: dict,
-    segment_col: str = "segment",
 ) -> DataFrame:
-    """Compute segment-level eligibility rates from normalised inputs."""
+    """Compute lga_segment-level eligibility rates from normalised inputs.
+
+    Each output row represents one lga_segment with total NMI counts, eligible
+    NMI counts, and eligibility rates for No_DER, Solar, and Solar_Battery
+    groups. Inputs are deduplicated by NMI where needed so repeated source rows
+    do not inflate eligibility counts.
+    """
 
     ensure_required_columns(
-        segment_attributes_df,
-        ["nmi", segment_col, "der_type"],
-        "segment_attributes_df",
+        lga_segment_attributes_df,
+        LGA_SEGMENT_ATTRIBUTES_REQUIRED_COLUMNS,
+        "lga_segment_attributes_df",
     )
     ensure_required_columns(smart_meter_df, SMART_METER_REQUIRED_COLUMNS, "smart_meter_df")
 
     eligible_resi_patterns = params["parameters"]["eligible_resi_patterns"]
     smart_meter_code = normalise_token(params["parameters"]["smart_meter_code"])
-    eligible_der_groups = {
-        group_name: [normalise_token(raw_value) for raw_value in raw_values]
-        for group_name, raw_values in params["parameters"]["eligible_der_groups"].items()
-    }
 
+    # Normalise the attribute feed to distinct NMI/lga_segment pairs before
+    # inferring DER groups from the segment name.
     attrs = (
-        segment_attributes_df.select(
+        lga_segment_attributes_df.select(
             F.trim(F.col("nmi").cast("string")).alias("nmi"),
-            F.col(segment_col).cast("string").alias("segment"),
-            F.col("der_type").cast("string").alias("der_type"),
+            F.col("lga_segment").cast("string").alias("lga_segment"),
         )
         .where(F.col("nmi").isNotNull())
         .dropDuplicates()
     )
 
-    der_type_normalised = normalise_string_column(F.col("der_type"))
+    normalised_lga_segment = normalise_string_column(F.col("lga_segment"))
+    # DER group flags are inferred from lga_segment suffixes. The conflict check
+    # below keeps a single NMI from contributing to multiple DER groups.
     attrs_with_group_flags = attrs.select(
-        "segment",
+        "lga_segment",
         "nmi",
         *[
-            F.when(der_type_normalised.isin(group_values), F.lit(1)).otherwise(F.lit(0)).alias(
-                f"is_{DER_GROUP_SUFFIXES[group_name]}"
-            )
-            for group_name, group_values in eligible_der_groups.items()
+            F.when(normalised_lga_segment.endswith(group_name.upper()), F.lit(1))
+            .otherwise(F.lit(0))
+            .alias(f"is_{DER_GROUP_SUFFIXES[group_name]}")
+            for group_name in DER_GROUP_SUFFIXES
         ],
     )
 
     _raise_if_nmi_maps_to_multiple_der_groups(attrs_with_group_flags)
 
-    attr_flags = attrs_with_group_flags.groupBy("segment", "nmi").agg(
+    attr_flags = attrs_with_group_flags.groupBy("lga_segment", "nmi").agg(
         *[
             F.max(F.col(f"is_{suffix}")).cast("int").alias(f"has_eligible_{suffix}")
             for suffix in DER_GROUP_SUFFIXES.values()
         ]
     )
 
+    # Smart-meter eligibility is reduced to one flag per NMI so duplicate meter
+    # rows cannot multiply the joined attribute rows.
     meter_flags = (
         smart_meter_df.select(
             F.trim(F.col("nmi").cast("string")).alias("nmi"),
@@ -86,12 +97,13 @@ def build_segment_metrics(
     )
 
     residential_pattern = "|".join(f"(?:{pattern.lower()})" for pattern in eligible_resi_patterns)
-    residential_flag = F.lower(F.coalesce(F.col("segment"), F.lit(""))).rlike(residential_pattern)
+    residential_flag = F.lower(F.coalesce(F.col("lga_segment"), F.lit(""))).rlike(residential_pattern)
 
+    # Aggregate to the public lga_segment metrics contract consumed by model.py.
     metrics = (
         attr_flags.join(meter_flags, on="nmi", how="left")
         .fillna({"has_smart_meter": 0})
-        .groupBy("segment")
+        .groupBy("lga_segment")
         .agg(
             F.count("*").cast("int").alias("n_total"),
             *[
@@ -134,7 +146,7 @@ def build_segment_metrics(
             F.when(F.col("n_total") > F.lit(0), F.col("n_eligible") / F.col("n_total")).otherwise(F.lit(0.0)),
         )
         .select(
-            F.col("segment"),
+            F.col("lga_segment"),
             F.col("n_total").cast("int"),
             F.col("n_eligible").cast("int"),
             F.col("eligibility_rate").cast("double"),
@@ -151,6 +163,8 @@ def build_segment_metrics(
 
 
 def _raise_if_nmi_maps_to_multiple_der_groups(attrs_with_group_flags: DataFrame) -> None:
+    """Raise if a single NMI is inferred into more than one DER group."""
+
     group_columns = [f"is_{suffix}" for suffix in DER_GROUP_SUFFIXES.values()]
     matched_group_count_expr = F.lit(0)
     for column_name in group_columns:
@@ -166,6 +180,6 @@ def _raise_if_nmi_maps_to_multiple_der_groups(attrs_with_group_flags: DataFrame)
     if conflicting_rows.limit(1).count():
         sample_nmis = [row["nmi"] for row in conflicting_rows.select("nmi").orderBy("nmi").limit(10).collect()]
         raise ValueError(
-            "One or more NMIs map to multiple DER eligibility groups. "
+            "One or more NMIs map to multiple DER eligibility groups inferred from lga_segment. "
             f"sample_nmis={sample_nmis}"
         )

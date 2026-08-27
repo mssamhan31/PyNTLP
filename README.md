@@ -1,91 +1,195 @@
-# pyntlp
+# PyNTLP
 
-`pyntlp` is a public Spark-native Python package for converting an SSO policy definition into additive interval PMA outputs: `pma_sso_mw` and `pma_sso_pct_of_underlying`.
+## Executive Summary
 
-## Context
+`PyNTLP` stands for **Python for Network Tariff to Load Profile**.
 
-This repository contains the reusable modelling package only. It is intended for workflows where a notebook or job reads organisation-specific source tables, normalises them into the package contract, runs the model, and then handles storage outside the package.
+PyNTLP is a Python tool for estimating how electricity network tariff designs
+could change customer load profiles. In simpler terms, it helps answer:
 
-The package boundary is deliberate:
+> If a tariff encourages customers to use electricity at different times of day,
+> what might the load profile look like afterwards?
 
-- `pyntlp` owns modelling logic, Spark DataFrame APIs, parameter validation, and documentation.
-- `pyntlp` does not own organisation-specific table names, Databricks paths, secrets, or write targets.
+The first implemented use case is the **Solar Sharer Offer (SSO)**. The broader
+goal is for PyNTLP to become a reusable tool for modelling many network tariff
+structures, not only SSO.
 
-## Tool Objective
+Contributor:
 
-The tool objective is to take:
+- M. Syahman Samhan
+- m.samhan@unsw.edu.au
 
-- normalised Spark DataFrames for baseline profiles, segment attributes, and smart-meter eligibility
-- a YAML parameter set with `constants` and `parameters`, including:
-  - a free window
-  - an optional explicit donor window
-  - DER eligibility cohorts for `No_DER`, `Solar`, and `Solar_Battery`
+## What Is The Solar Sharer Offer?
 
-and return:
+The Solar Sharer Offer is a network tariff concept that encourages eligible
+customers to use more electricity during a defined daytime window, when solar
+generation is more available on the local network.
 
-- a deterministic Spark DataFrame with one row per baseline input row
-- an additive interval delta column, `pma_sso_mw`
-- a derived interval percentage column, `pma_sso_pct_of_underlying`
-- a validation report for schema and energy-neutrality checks
+The idea is not that customers necessarily use more electricity overall. Rather,
+some flexible electricity use may move from one part of the day into another.
+For example, customers might shift activities such as appliance use, electric
+vehicle charging, or other flexible loads into the Solar Sharer window.
 
-Runtime targets:
+For planning and analysis, this means the original load profile needs to be
+adjusted. PyNTLP helps estimate that adjustment.
 
-- Python `3.12`
-- PySpark `4.x`
+## Current SSO Design Details
 
-## How To Use
+This summary reflects public Australian Government and Australian Energy
+Regulator material available in May 2026. Check the official sources below
+before using these details for customer-facing, regulatory, or commercial work.
 
-For local development from this repository:
+The Solar Sharer Offer is planned to start on **1 July 2026** in areas covered
+by the Default Market Offer.
+
+Initial availability is for households in:
+
+- New South Wales
+- South Australia
+- South East Queensland
+
+It is not an Australia-wide offer at launch. In particular, "Queensland" here
+means South East Queensland, not the whole state. Public government material
+also says consideration is being given to making an SSO, or equivalent option,
+available in other areas.
+
+The free electricity window is expected to be:
+
+- **11:00 am to 2:00 pm** in New South Wales
+- **11:00 am to 2:00 pm** in South East Queensland
+- **12:00 pm to 3:00 pm** in South Australia
+
+The offer is designed as an opt-in tariff for households with smart meters.
+Government material says it is intended to be available to households with or
+without rooftop solar, and to both renters and homeowners.
+
+The public design also includes a reasonable-use cap. Government material
+describes this as access to up to **24 kWh** of free electricity during the
+daily free-power window.
+
+## Why This Tool Exists
+
+Tariff design can influence when customers use electricity. Network planners,
+tariff analysts, researchers, and engineers often need a repeatable way to test
+those impacts.
+
+PyNTLP aims to make that process clearer and more reusable by separating:
+
+- the tariff assumptions
+- the customer eligibility assumptions
+- the load-profile adjustment logic
+- the validation checks that help confirm the result is sensible
+
+The SSO model is the first version of that workflow. Over time, the same
+structure can be extended to other tariffs, such as different time-of-use,
+demand, export, or location-based tariff designs.
+
+## What PyNTLP Does
+
+At a high level, PyNTLP:
+
+- starts with an existing electricity load profile
+- applies tariff and customer eligibility assumptions
+- estimates how much load may move into the target tariff window
+- removes the same amount of energy from other periods when the model assumes
+  load is being shifted rather than created
+- produces an adjusted profile effect that can be used for planning, reporting,
+  and further analysis
+- runs checks to help identify obvious issues in the output
+
+The current SSO implementation focuses on daily load shifting into the Solar
+Sharer window while keeping the modelled daily energy balanced.
+
+For the current public SSO settings, this means PyNTLP models load that may move
+into the free daytime period, especially **11:00 am to 2:00 pm** in New South
+Wales and South East Queensland.
+
+## What PyNTLP Is Not
+
+PyNTLP is not:
+
+- a billing system
+- a customer pricing engine
+- a tariff recommendation tool
+- a replacement for customer research or behavioural trials
+- a production data pipeline by itself
+- a tool that decides whether any tariff is fair, optimal, or commercially
+  appropriate
+
+It is a modelling tool. Its role is to help estimate possible load-profile
+impacts under stated assumptions.
+
+## Current Status
+
+The current package implements the first Solar Sharer Offer workflow.
+
+The technical implementation can:
+
+- load model assumptions from configuration
+- calculate customer eligibility summaries
+- estimate SSO-related load-profile changes
+- apply participant caps so customer populations are not over-counted
+- check that the modelled energy movement is balanced
+
+Detailed implementation notes are kept in the `docs/` folder so this README can
+stay readable for a broader audience.
+
+## Who May Find This Useful
+
+PyNTLP may be useful for:
+
+- electricity network planners
+- tariff and pricing analysts
+- energy researchers
+- forecasting teams
+- data scientists and engineers supporting tariff modelling
+- students or collaborators studying how tariffs may affect load profiles
+
+## Documentation
+
+For more detail, start with the [docs index](docs/README.md), or go directly to:
+
+- [Glossary](docs/glossary.md)
+- [Assumptions and limitations](docs/assumptions-and-limitations.md)
+- [Usage guide](docs/usage-guide.md)
+- [Model overview](docs/model-overview.md)
+- [API contracts](docs/api-contracts.md)
+- [Troubleshooting](docs/troubleshooting.md)
+- [Development notes](docs/development.md)
+- [Repository structure](docs/repo-structure.md)
+
+## References
+
+Official sources for the public SSO description:
+
+- [DCCEEW: Solar Sharer Offer to help cut electricity bills](https://www.dcceew.gov.au/about/news/solar-sharer-offer-help-cut-electricity-bills)
+- [DCCEEW: Default Market Offer](https://www.dcceew.gov.au/energy/programs/default-market-offer)
+- [AER: Default Market Offer 2026-27 review](https://www.aer.gov.au/industry/registers/resources/reviews/default-market-offer-2026-27)
+- [AER: Draft Default Market Offer 2026-27 news release](https://www.aer.gov.au/news/articles/news-releases/aer-releases-draft-default-market-offer-2026-27)
+- [AER: Solar Sharer Offer fact sheet for retailers](https://www.aer.gov.au/system/files/2026-03/Solar%20Sharer%20Offer%20-%20Fact%20Sheet%20for%20Retailers%20March%202026.pdf)
+
+## For Developers
+
+Install locally in editable mode:
 
 ```bash
 pip install -e .[dev]
 ```
 
-Core API:
+Run tests:
 
-```python
-from pyntlp import (
-    build_segment_metrics,
-    compute_pma_sso,
-    load_params,
-    validate_pma,
-)
+```bash
+python -m pytest
 ```
 
-Typical flow:
+Some tests use local Spark functionality and require Java. If Java is not
+available, those tests are skipped and the pure Python tests still run.
 
-```python
-params = load_params("params.yaml")
+The main package code lives in:
 
-segment_metrics_df = build_segment_metrics(
-    segment_attributes_df=segment_attributes_df,
-    smart_meter_df=smart_meter_df,
-    params=params,
-)
-
-pma_delta_df = compute_pma_sso(
-    baseline_profiles_df=baseline_profiles_df,
-    segment_metrics_df=segment_metrics_df,
-    params=params,
-)
-
-validation_report_df = validate_pma(pma_delta_df, params)
+```text
+src/pyntlp/
 ```
 
-The package ships a public YAML template at `src/pyntlp/resources/pyntlp_template.yaml`.
-
-Further documentation:
-
-- [Docs index](docs/README.md)
-- [Repo structure](docs/repo-structure.md)
-- [API and contracts](docs/api-contracts.md)
-- [Model overview](docs/model-overview.md)
-- [Development notes](docs/development.md)
-
-## Contributor
-
-Contributors should keep this repository generic and public. Changes should avoid organisation-specific data assets, preserve the package contract, and update tests and documentation when behaviour changes.
-
-## Invitation To Contribute
-
-If you find unclear documentation, bugs, or feature requests, please use GitHub Issues and Pull Requests so the discussion and changes stay visible in the repo history.
+The detailed technical contract, including inputs, outputs, and validation
+behaviour, is documented in [API contracts](docs/api-contracts.md).

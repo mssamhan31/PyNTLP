@@ -1,4 +1,9 @@
-"""Validation helpers for PMA output schema and neutrality checks."""
+"""Validation helpers for PMA output schema and neutrality checks.
+
+The validation report is intentionally Spark-native so notebooks and pipelines
+can display or persist it beside model outputs. Each row is a named check with a
+PASS/FAIL status and human-readable diagnostic detail.
+"""
 
 from __future__ import annotations
 
@@ -16,11 +21,17 @@ from .windows import get_window_intervals
 
 
 def validate_pma(pma_delta_df: DataFrame, params: dict) -> DataFrame:
-    """Validate output schema and group-level energy neutrality."""
+    """Validate output schema, required values, and group-level energy neutrality.
+
+    The function never mutates the PMA DataFrame. It returns a small validation
+    DataFrame that callers can display, persist, or convert into a hard failure.
+    """
 
     spark = pma_delta_df.sparkSession
     report_rows: list[tuple[str, str, str]] = []
 
+    # Schema checks are exact so column order and Spark types stay aligned with
+    # the package contract.
     actual_schema_signature = [
         (field.name, field.dataType.simpleString()) for field in pma_delta_df.schema.fields
     ]
@@ -44,6 +55,7 @@ def validate_pma(pma_delta_df: DataFrame, params: dict) -> DataFrame:
         )
     )
 
+    # Only customer_type may be nullable in the public output contract.
     missing_non_null_columns = sorted(set(OUTPUT_NON_NULL_COLUMNS) - set(pma_delta_df.columns))
     if missing_non_null_columns:
         report_rows.append(
@@ -70,7 +82,7 @@ def validate_pma(pma_delta_df: DataFrame, params: dict) -> DataFrame:
             )
         )
 
-    missing_energy_columns = sorted(set(GROUP_COLUMNS + ["pma_sso_mw"]) - set(pma_delta_df.columns))
+    missing_energy_columns = sorted(set(GROUP_COLUMNS + ["delta_mw"]) - set(pma_delta_df.columns))
     if missing_energy_columns:
         report_rows.append(
             (
@@ -82,9 +94,11 @@ def validate_pma(pma_delta_df: DataFrame, params: dict) -> DataFrame:
         )
         return spark.createDataFrame(report_rows, schema=VALIDATION_REPORT_SCHEMA)
 
+    # Convert interval MW deltas to MWh before checking neutrality at the same
+    # model grouping grain used by compute_pma_sso.
     interval_hours = get_window_intervals(params)[2]
     energy_error_df = pma_delta_df.groupBy(*GROUP_COLUMNS).agg(
-        F.abs(F.sum(F.col("pma_sso_mw") * F.lit(interval_hours))).alias("abs_energy_error_mwh")
+        F.abs(F.sum(F.col("delta_mw") * F.lit(interval_hours))).alias("abs_energy_error_mwh")
     )
     max_error = energy_error_df.agg(F.max(F.col("abs_energy_error_mwh"))).first()[0]
     max_error = float(max_error or 0.0)

@@ -1,4 +1,10 @@
-"""Parameter loading and validation for the public YAML contract."""
+"""Parameter loading and validation for the public YAML contract.
+
+This module is the package boundary for user-supplied model configuration. It
+accepts either a YAML file path or an already-loaded dictionary, validates the
+public FC2026 contract, and returns a normalised dictionary used by the Spark
+model code.
+"""
 
 from __future__ import annotations
 
@@ -20,6 +26,9 @@ REQUIRED_CONSTANT_KEYS = {
     "interval_minutes",
     "intervals_per_day",
     "timezone",
+}
+
+REMOVED_CONSTANT_KEYS = {
     "segment_column",
     "output_value_column",
 }
@@ -27,25 +36,35 @@ REQUIRED_CONSTANT_KEYS = {
 REQUIRED_PARAMETER_KEYS = {
     "eligible_resi_patterns",
     "smart_meter_code",
-    "eligible_der_groups",
     "window_start",
     "window_end",
     "cap_kwh_per_day",
     "u_eligible_der_group",
     "ramp_start_fcy",
     "ramp_full_fcy",
-    "s_segment",
+    "s_lga_segment",
     "k_response",
     "window_shape",
     "donor_shape",
     "energy_accounting",
 }
 
+REMOVED_PARAMETER_KEYS = {
+    "eligible_der_groups",
+    "s_segment",
+}
+
 TIME_PATTERN = re.compile(r"^([01]\d|2[0-3]):([0-5]\d)$")
 
 
 def load_params(path_or_dict: str | Path | dict[str, Any]) -> dict[str, Any]:
-    """Load params from YAML or a dictionary and return a validated structure."""
+    """Load params from YAML or a dictionary and return a validated structure.
+
+    The returned object always contains `constants` and `parameters` sections
+    with supported optional values filled as `None` or empty mappings. Callers
+    can rely on this function to reject removed keys and malformed values before
+    Spark transformations are built.
+    """
 
     raw_params = _load_raw_params(path_or_dict)
     if not isinstance(raw_params, dict):
@@ -65,6 +84,8 @@ def load_params(path_or_dict: str | Path | dict[str, Any]) -> dict[str, Any]:
 
 
 def _load_raw_params(path_or_dict: str | Path | dict[str, Any]) -> dict[str, Any]:
+    """Read raw params from disk or pass through an in-memory dictionary."""
+
     if isinstance(path_or_dict, (str, Path)):
         path = Path(path_or_dict)
         with path.open("r", encoding="utf-8") as handle:
@@ -78,8 +99,17 @@ def _load_raw_params(path_or_dict: str | Path | dict[str, Any]) -> dict[str, Any
 
 
 def _validate_constants(raw_constants: Any) -> dict[str, Any]:
+    """Validate model constants and derive interval consistency."""
+
     if not isinstance(raw_constants, dict):
         raise ValueError("`constants` must be a dictionary.")
+
+    removed_keys = sorted(REMOVED_CONSTANT_KEYS & set(raw_constants))
+    if removed_keys:
+        raise ValueError(
+            "`constants` contains removed keys. Use the FC2026 lga_segment contract instead: "
+            f"{removed_keys}"
+        )
 
     missing_keys = sorted(REQUIRED_CONSTANT_KEYS - set(raw_constants))
     if missing_keys:
@@ -102,15 +132,22 @@ def _validate_constants(raw_constants: Any) -> dict[str, Any]:
         "interval_minutes": interval_minutes,
         "intervals_per_day": intervals_per_day,
         "timezone": _require_str(raw_constants, "timezone"),
-        "segment_column": _require_str(raw_constants, "segment_column"),
-        "output_value_column": _require_str(raw_constants, "output_value_column"),
         "schema_version": _optional_str(raw_constants.get("schema_version")),
     }
 
 
 def _validate_parameters(raw_parameters: Any) -> dict[str, Any]:
+    """Validate modelling parameters and normalise optional controls."""
+
     if not isinstance(raw_parameters, dict):
         raise ValueError("`parameters` must be a dictionary.")
+
+    removed_keys = sorted(REMOVED_PARAMETER_KEYS & set(raw_parameters))
+    if removed_keys:
+        raise ValueError(
+            "`parameters` contains removed keys. Use `s_lga_segment`; DER group is inferred from "
+            f"`lga_segment` suffix: {removed_keys}"
+        )
 
     missing_keys = sorted(REQUIRED_PARAMETER_KEYS - set(raw_parameters))
     if missing_keys:
@@ -126,7 +163,6 @@ def _validate_parameters(raw_parameters: Any) -> dict[str, Any]:
     return {
         "eligible_resi_patterns": _require_str_list(raw_parameters, "eligible_resi_patterns"),
         "smart_meter_code": _require_str(raw_parameters, "smart_meter_code"),
-        "eligible_der_groups": _require_eligible_der_groups(raw_parameters, "eligible_der_groups"),
         "window_start": _require_time(raw_parameters, "window_start"),
         "window_end": _require_time(raw_parameters, "window_end"),
         "donor_window_start": donor_window_start,
@@ -141,7 +177,13 @@ def _validate_parameters(raw_parameters: Any) -> dict[str, Any]:
         ),
         "ramp_start_fcy": ramp_start_fcy,
         "ramp_full_fcy": ramp_full_fcy,
-        "s_segment": _require_float_mapping(raw_parameters, "s_segment", require_default=True, minimum=0.0, maximum=1.0),
+        "s_lga_segment": _require_float_mapping(
+            raw_parameters,
+            "s_lga_segment",
+            require_default=True,
+            minimum=0.0,
+            maximum=1.0,
+        ),
         "k_response": _require_float(raw_parameters, "k_response", minimum=0.0),
         "window_shape": _require_choice(raw_parameters, "window_shape", SUPPORTED_WINDOW_SHAPES),
         "donor_shape": _require_choice(raw_parameters, "donor_shape", SUPPORTED_DONOR_SHAPES),
@@ -154,6 +196,8 @@ def _validate_parameters(raw_parameters: Any) -> dict[str, Any]:
 
 
 def _require_str(container: dict[str, Any], key: str) -> str:
+    """Return a required non-empty string from a mapping."""
+
     value = container.get(key)
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"`{key}` must be a non-empty string.")
@@ -161,6 +205,8 @@ def _require_str(container: dict[str, Any], key: str) -> str:
 
 
 def _optional_str(value: Any) -> str | None:
+    """Return a stripped optional string, treating blanks as missing."""
+
     if value is None:
         return None
     if not isinstance(value, str):
@@ -170,6 +216,8 @@ def _optional_str(value: Any) -> str | None:
 
 
 def _require_int(container: dict[str, Any], key: str, minimum: int | None = None) -> int:
+    """Return a required integer, optionally enforcing a lower bound."""
+
     value = container.get(key)
     if isinstance(value, bool) or not isinstance(value, int):
         raise ValueError(f"`{key}` must be an integer.")
@@ -179,6 +227,8 @@ def _require_int(container: dict[str, Any], key: str, minimum: int | None = None
 
 
 def _require_float(container: dict[str, Any], key: str, minimum: float | None = None, maximum: float | None = None) -> float:
+    """Return a required numeric value as float, optionally bounded."""
+
     return _optional_float(container.get(key), minimum=minimum, maximum=maximum, key=key)
 
 
@@ -188,6 +238,8 @@ def _optional_float(
     maximum: float | None = None,
     key: str = "value",
 ) -> float | None:
+    """Return an optional numeric value as float, optionally bounded."""
+
     if value is None:
         return None
     if isinstance(value, bool) or not isinstance(value, (int, float)):
@@ -201,6 +253,8 @@ def _optional_float(
 
 
 def _require_str_list(container: dict[str, Any], key: str) -> list[str]:
+    """Return a required non-empty list of non-empty strings."""
+
     value = container.get(key)
     if not isinstance(value, list) or not value:
         raise ValueError(f"`{key}` must be a non-empty list of strings.")
@@ -215,6 +269,8 @@ def _require_str_list(container: dict[str, Any], key: str) -> list[str]:
 
 
 def _require_time(container: dict[str, Any], key: str) -> str:
+    """Return a required HH:MM 24-hour clock value."""
+
     value = _require_str(container, key)
     if not TIME_PATTERN.match(value):
         raise ValueError(f"`{key}` must use HH:MM 24-hour format.")
@@ -222,6 +278,8 @@ def _require_time(container: dict[str, Any], key: str) -> str:
 
 
 def _optional_time(container: dict[str, Any], key: str) -> str | None:
+    """Return an optional HH:MM 24-hour clock value."""
+
     value = container.get(key)
     if value is None:
         return None
@@ -234,6 +292,8 @@ def _optional_time(container: dict[str, Any], key: str) -> str | None:
 
 
 def _require_choice(container: dict[str, Any], key: str, supported_values: set[str]) -> str:
+    """Return a lower-case option constrained to supported values."""
+
     value = _require_str(container, key).lower()
     if value not in supported_values:
         raise ValueError(f"`{key}` must be one of {sorted(supported_values)}.")
@@ -247,6 +307,8 @@ def _require_float_mapping(
     minimum: float | None = None,
     maximum: float | None = None,
 ) -> dict[str, float]:
+    """Return a mapping of string keys to float values with optional bounds."""
+
     mapping = container.get(key)
     if not isinstance(mapping, dict) or not mapping:
         raise ValueError(f"`{key}` must be a non-empty mapping.")
@@ -275,6 +337,8 @@ def _require_exact_float_mapping(
     minimum: float | None = None,
     maximum: float | None = None,
 ) -> dict[str, float]:
+    """Return a bounded float mapping that must contain exactly known keys."""
+
     mapping = container.get(key)
     if not isinstance(mapping, dict) or not mapping:
         raise ValueError(f"`{key}` must be a non-empty mapping.")
@@ -297,46 +361,9 @@ def _require_exact_float_mapping(
     return normalised_mapping
 
 
-def _require_eligible_der_groups(container: dict[str, Any], key: str) -> dict[str, list[str]]:
-    mapping = container.get(key)
-    if not isinstance(mapping, dict) or not mapping:
-        raise ValueError(f"`{key}` must be a non-empty mapping.")
-
-    missing_keys = sorted(set(ELIGIBLE_DER_GROUP_KEYS) - set(mapping))
-    extra_keys = sorted(set(mapping) - set(ELIGIBLE_DER_GROUP_KEYS))
-    if missing_keys or extra_keys:
-        raise ValueError(
-            f"`{key}` must contain exactly {list(ELIGIBLE_DER_GROUP_KEYS)}. missing={missing_keys}; extra={extra_keys}"
-        )
-
-    cleaned_mapping: dict[str, list[str]] = {}
-    raw_value_to_group: dict[str, str] = {}
-
-    for group_name in ELIGIBLE_DER_GROUP_KEYS:
-        cleaned_values: list[str] = []
-        raw_values = mapping[group_name]
-        if not isinstance(raw_values, list) or not raw_values:
-            raise ValueError(f"`{key}.{group_name}` must be a non-empty list of strings.")
-
-        for raw_value in raw_values:
-            if not isinstance(raw_value, str) or not raw_value.strip():
-                raise ValueError(f"`{key}.{group_name}` must contain only non-empty strings.")
-            cleaned_value = raw_value.strip()
-            normalised_value = cleaned_value.upper()
-            previous_group = raw_value_to_group.get(normalised_value)
-            if previous_group is not None and previous_group != group_name:
-                raise ValueError(
-                    f"`{key}` maps raw DER value `{cleaned_value}` to both `{previous_group}` and `{group_name}`."
-                )
-            raw_value_to_group[normalised_value] = group_name
-            cleaned_values.append(cleaned_value)
-
-        cleaned_mapping[group_name] = cleaned_values
-
-    return cleaned_mapping
-
-
 def _validate_optional_donor_window(container: dict[str, Any]) -> tuple[str | None, str | None]:
+    """Validate optional donor window start/end values as an all-or-none pair."""
+
     donor_window_start = _optional_time(container, "donor_window_start")
     donor_window_end = _optional_time(container, "donor_window_end")
 
@@ -347,6 +374,8 @@ def _validate_optional_donor_window(container: dict[str, Any]) -> tuple[str | No
 
 
 def _optional_float_mapping(value: Any) -> dict[str, float]:
+    """Return an optional string-to-float mapping, using an empty mapping when omitted."""
+
     if value is None:
         return {}
     if not isinstance(value, dict):

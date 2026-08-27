@@ -1,231 +1,258 @@
-# API And Contracts
+# API Contracts
 
-This page describes the public API, required inputs, YAML contract, and output schema for `pyntlp`.
+## Executive Summary
 
-## Public API
+This page describes the public contracts for `pyntlp`: the functions callers
+should use, the columns those functions expect, the parameters they validate,
+and the shape of the Spark DataFrames they return.
 
-The package exports these public functions:
+The most important contract decisions are:
 
-- `load_params(path_or_dict) -> dict`
-- `build_segment_metrics(segment_attributes_df, smart_meter_df, params, segment_col="segment")`
-- `compute_pma_sso(baseline_profiles_df, segment_metrics_df, params)`
-- `validate_pma(pma_delta_df, params)`
-- `get_window_intervals(params) -> (W, D, interval_hours)`
-- `resolve_segment_parameter(segment, mapping, default_value)`
+- callers pass normalised Spark DataFrames into the package
+- callers own table IO, source mappings, widgets, and production orchestration
+- `compute_pma_sso(...)` preserves baseline interval shape and returns only
+  additive PMA deltas
+- `customer_type` is carried through as an output attribute, not used as a
+  model dimension
+- participant caps are applied at the segment population grain, excluding
+  `fc_object_id`
+- missing `lga_segment` metrics are non-breaking and produce zero deltas
 
-## Parameter Contract
+## Public Functions
 
-`load_params(...)` accepts either:
+### `load_params(path_or_dict) -> dict`
 
-- a filesystem path to a YAML file
-- a Python dictionary already loaded in memory
+Loads model parameters from either:
 
-The top-level contract is:
+- a YAML file path
+- an in-memory Python dictionary
 
-```yaml
-constants:
-  ...
-parameters:
-  ...
-```
+The function validates the required `constants` and `parameters` sections and
+returns a plain dictionary. It should be called before metrics, model, or
+validation functions so the same validated parameter object is used throughout
+the run.
 
-### `constants`
+### `build_lga_segment_metrics(lga_segment_attributes_df, smart_meter_df, params)`
 
-Required keys:
+Builds one metrics row per `lga_segment`.
+
+Inputs:
+
+- `lga_segment_attributes_df`: NMI-to-segment attributes
+- `smart_meter_df`: NMI-to-meter-type attributes
+- `params`: validated parameter dictionary
+
+Output:
+
+- a Spark DataFrame at `lga_segment` grain with NMI counts and eligibility rates
+
+### `compute_pma_sso(baseline_profiles_df, lga_segment_metrics_df, params)`
+
+Computes additive interval-level PMA deltas.
+
+Inputs:
+
+- `baseline_profiles_df`: normalised baseline profile rows
+- `lga_segment_metrics_df`: output from `build_lga_segment_metrics(...)`
+- `params`: validated parameter dictionary
+
+Output:
+
+- a Spark DataFrame containing the canonical PMA output columns and `delta_mw`
+
+### `validate_pma(pma_delta_df, params)`
+
+Returns a Spark validation report.
+
+The report is intentionally small and portable. It validates package-level
+contracts, not organisation-specific pipeline rules.
+
+## Config Contract
+
+Parameters are expected to contain two top-level sections:
+
+- `constants`
+- `parameters`
+
+Required `constants`:
 
 - `model_name`
 - `model_tier`
 - `interval_minutes`
 - `intervals_per_day`
 - `timezone`
-- `segment_column`
-- `output_value_column`
 
-Notes:
-
-- `interval_minutes` must divide evenly into `1440`
-- `intervals_per_day` must equal `1440 / interval_minutes`
-
-### `parameters`
-
-Required keys:
+Required `parameters`:
 
 - `eligible_resi_patterns`
 - `smart_meter_code`
-- `eligible_der_groups`
 - `window_start`
 - `window_end`
 - `cap_kwh_per_day`
 - `u_eligible_der_group`
 - `ramp_start_fcy`
 - `ramp_full_fcy`
-- `s_segment`
+- `s_lga_segment`
 - `k_response`
 - `window_shape`
 - `donor_shape`
 - `energy_accounting`
 
-Optional donor-window keys:
+Optional accepted `parameters`:
 
 - `donor_window_start`
 - `donor_window_end`
+- `season_modifiers`
+- `daytype_modifiers`
+- `rebound_share`
+- `rebound_shape`
 
-Current v0.1 supported values:
+The optional modifier and rebound fields are accepted to keep the configuration
+surface stable, but the current v0.1 calculation does not use them in the PMA
+delta calculation.
+
+Supported calculation modes:
 
 - `window_shape: flat`
 - `donor_shape: flat`
 - `energy_accounting: energy_neutral`
 
-`eligible_der_groups` is a required three-entry mapping from canonical cohort to raw source values:
+Unsupported modes are rejected during parameter validation.
 
-```yaml
-eligible_der_groups:
-  No_DER: ["No_DER"]
-  Solar: ["Solar"]
-  Solar_Battery: ["Solar_Battery"]
-```
+## Baseline Input Contract
 
-Rules:
+`compute_pma_sso(...)` requires these columns:
 
-- the required cohort keys are exactly `No_DER`, `Solar`, and `Solar_Battery`
-- raw source values are matched case-insensitively after trimming
-- the same raw source value cannot appear in more than one cohort
-
-`u_eligible_der_group` is a required three-entry mapping:
-
-```yaml
-u_eligible_der_group:
-  No_DER: 0.25
-  Solar: 0.05
-  Solar_Battery: 0.10
-```
-
-`s_segment` remains a flat mapping with a required default:
-
-```yaml
-s_segment:
-  default: 0.10
-  Residential: 0.15
-```
-
-Donor-window rules:
-
-- if `donor_window_start` and `donor_window_end` are omitted, donor intervals default to the complement of the free window
-- if one donor-window key is supplied without the other, param loading fails
-- explicit donor windows must not overlap the free window
-- explicit donor windows use the same start-inclusive, end-exclusive, interval-alignment, and overnight rules as the free window
-
-## Input DataFrames
-
-The package consumes normalised Spark DataFrames. It does not read source tables directly.
-
-### Baseline Profiles
-
-Required columns:
-
-- `fc_run_year`
-- `version`
 - `fc_object_id`
-- `segment`
+- `lga_segment`
+- `customer_type`
 - `fcy`
 - `forecast_scenario`
-- `poe`
-- `representative_day`
 - `season`
 - `day_type`
+- `representative_day`
+- `coincident_type`
+- `poe`
 - `interval`
-- `underlying_demand_mw`
+- `baseline_demand_mw`
 
-Expected behaviour:
+The model key is:
 
-- FCY scope is whatever exists in the baseline DataFrame
-- output row count should match baseline row count
-- interval numbering is expected to be 1-based and aligned from midnight
+```text
+fc_object_id
+lga_segment
+fcy
+forecast_scenario
+season
+day_type
+representative_day
+coincident_type
+poe
+interval
+```
 
-### Segment Attributes
+`customer_type` is required by presence so the output can mirror the baseline
+table shape. Its value may be null. It is not used for eligibility, adoption,
+duplicate-key checks, energy-neutrality grouping, or delta allocation.
 
-Required columns:
+Duplicate baseline rows are rejected when they share the same model key, even
+if `customer_type` differs.
+
+## Metrics Input Contracts
+
+`build_lga_segment_metrics(...)` expects `lga_segment_attributes_df` to contain:
 
 - `nmi`
-- `segment`
-- `der_type`
+- `lga_segment`
 
-Optional extension columns may exist, but they are not required by the v0.1 package logic.
-
-### Smart Meter Eligibility
-
-Required columns:
+It expects `smart_meter_df` to contain:
 
 - `nmi`
 - `meter_type_code`
 
-Join rule:
+Both inputs should be normalised before they enter the package. For example,
+source-specific column names should be mapped by the caller or wrapper notebook.
 
-- `smart_meter_df.nmi` joins to `segment_attributes_df.nmi`
+## Metrics Output Contract
 
-## Segment Metrics Output
+The metrics output is one row per `lga_segment`.
 
-`build_segment_metrics(...)` returns one row per segment with:
+Expected columns are:
 
-- `segment`
+- `lga_segment`
 - `n_total`
-- `n_eligible`
-- `eligibility_rate`
+- `n_eligible_total`
 - `n_eligible_no_der`
 - `n_eligible_solar`
 - `n_eligible_solar_battery`
+- `eligibility_rate_total`
 - `eligibility_rate_no_der`
 - `eligibility_rate_solar`
 - `eligibility_rate_solar_battery`
 
-Interpretation:
+Residential eligibility is matched against the full `lga_segment` string using
+`eligible_resi_patterns`.
 
-- `n_eligible` is the sum of the three cohort-specific counts
-- all cohort-specific counts still require residential-segment matching and a smart meter
-- one NMI cannot contribute to more than one DER cohort
+DER group is inferred from the suffix of `lga_segment`. Supported suffixes are:
 
-## PMA Output
+- `No_DER`
+- `Solar`
+- `Solar_Battery`
 
-`compute_pma_sso(...)` returns a Spark DataFrame with exactly these columns:
+If an NMI appears under multiple inferred DER groups, metrics construction
+raises an error so the duplicated classification can be fixed upstream.
 
-- `fc_run_year`
-- `version`
+## PMA Output Contract
+
+`compute_pma_sso(...)` returns exactly:
+
 - `fc_object_id`
-- `segment`
+- `lga_segment`
+- `customer_type`
 - `fcy`
 - `forecast_scenario`
-- `poe`
-- `representative_day`
 - `season`
 - `day_type`
+- `representative_day`
+- `coincident_type`
+- `poe`
 - `interval`
-- `pma_sso_mw`
-- `pma_sso_pct_of_underlying`
+- `delta_mw`
 
-Column types:
+The output is at interval granularity. It mirrors the baseline dimensions and
+replaces `baseline_demand_mw` with the additive `delta_mw` value.
 
-- `fc_run_year`: `int`
-- `version`: `string`
-- `fc_object_id`: `int`
-- `segment`: `string`
-- `fcy`: `int`
-- `forecast_scenario`: `string`
-- `poe`: `string`
-- `representative_day`: `string`
-- `season`: `string`
-- `day_type`: `string`
-- `interval`: `int`
-- `pma_sso_mw`: `double`
-- `pma_sso_pct_of_underlying`: `double`
+## Cap And Missing-Coverage Behaviour
 
-Interpretation:
+Participant caps are calculated at the population cap grain:
 
-- `pma_sso_mw` is an additive interval delta in MW
-- `pma_sso_pct_of_underlying` is `100 * pma_sso_mw / underlying_demand_mw` for the same row
-- `pma_sso_pct_of_underlying` is `null` when `underlying_demand_mw` is zero
-- downstream systems combine `pma_sso_mw` with baseline demand outside the package
+```text
+lga_segment
+fcy
+forecast_scenario
+season
+day_type
+representative_day
+coincident_type
+poe
+```
 
-## Validation Report
+That grain deliberately excludes `fc_object_id`. After the cap is calculated,
+the capped shift energy is allocated back to `fc_object_id` groups by their
+share of uncapped shift energy.
+
+If a baseline `lga_segment` has no matching metrics row:
+
+- the output rows are retained
+- metrics are treated as zero
+- adoption is zero
+- `delta_mw` is zero
+
+This is non-breaking package behaviour. Callers should add operational
+reporting if missing metrics coverage needs to be visible in a notebook or
+pipeline validation report.
+
+## Validation Report Contract
 
 `validate_pma(...)` returns a Spark DataFrame with:
 
@@ -233,9 +260,19 @@ Interpretation:
 - `status`
 - `detail`
 
-Current checks:
+Current package validation checks include:
 
-- exact output schema match
-- required output columns present
-- null checks on required output columns
-- group-level energy neutrality
+- exact output schema and column order
+- missing output columns
+- extra output columns
+- required non-null output columns
+- grouped energy neutrality
+
+Typical statuses are:
+
+- `pass`
+- `fail`
+
+Wrappers can add richer statuses such as `pass with info` for non-breaking
+operational diagnostics. The package itself keeps validation focused on the
+portable public contract.

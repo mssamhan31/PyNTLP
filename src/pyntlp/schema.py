@@ -1,26 +1,31 @@
-"""Shared schema definitions for public package contracts."""
+"""Shared schema definitions for public package contracts.
+
+These constants are the single source of truth for required input columns,
+model grouping columns, output ordering, and validation report structure.
+Keeping them centralised makes notebook wrappers and tests easier to compare.
+"""
 
 from pyspark.sql.types import DoubleType, IntegerType, StringType, StructField, StructType
 
 BASELINE_REQUIRED_COLUMNS = [
-    "fc_run_year",
-    "version",
     "fc_object_id",
-    "segment",
+    "lga_segment",
+    "customer_type",
     "fcy",
     "forecast_scenario",
-    "poe",
-    "representative_day",
     "season",
     "day_type",
+    "representative_day",
+    "coincident_type",
+    "poe",
     "interval",
-    "underlying_demand_mw",
+    "baseline_demand_mw",
 ]
 
-SEGMENT_ATTRIBUTES_REQUIRED_COLUMNS = [
+# Source contracts used before PMA computation.
+LGA_SEGMENT_ATTRIBUTES_REQUIRED_COLUMNS = [
     "nmi",
-    "segment",
-    "der_type",
+    "lga_segment",
 ]
 
 SMART_METER_REQUIRED_COLUMNS = [
@@ -28,8 +33,10 @@ SMART_METER_REQUIRED_COLUMNS = [
     "meter_type_code",
 ]
 
-SEGMENT_METRICS_REQUIRED_COLUMNS = [
-    "segment",
+# Metrics contract produced by `build_lga_segment_metrics` and consumed by
+# `compute_pma_sso`.
+LGA_SEGMENT_METRICS_REQUIRED_COLUMNS = [
+    "lga_segment",
     "n_total",
     "n_eligible",
     "eligibility_rate",
@@ -41,22 +48,27 @@ SEGMENT_METRICS_REQUIRED_COLUMNS = [
     "eligibility_rate_solar_battery",
 ]
 
+# Output contracts are ordered deliberately to mirror the baseline dimensions
+# while replacing baseline demand with additive PMA deltas.
 OUTPUT_METRIC_COLUMNS = [
-    "pma_sso_mw",
-    "pma_sso_pct_of_underlying",
+    "delta_mw",
+]
+
+OUTPUT_ATTRIBUTE_COLUMNS = [
+    "customer_type",
 ]
 
 OUTPUT_COLUMNS = [
-    "fc_run_year",
-    "version",
     "fc_object_id",
-    "segment",
+    "lga_segment",
+    "customer_type",
     "fcy",
     "forecast_scenario",
-    "poe",
-    "representative_day",
     "season",
     "day_type",
+    "representative_day",
+    "coincident_type",
+    "poe",
     "interval",
     *OUTPUT_METRIC_COLUMNS,
 ]
@@ -65,38 +77,33 @@ OUTPUT_KEY_COLUMNS = [
     column_name for column_name in OUTPUT_COLUMNS if column_name not in OUTPUT_METRIC_COLUMNS
 ]
 
+MODEL_INTERVAL_KEY_COLUMNS = [
+    column_name for column_name in OUTPUT_KEY_COLUMNS if column_name not in OUTPUT_ATTRIBUTE_COLUMNS
+]
+
 OUTPUT_NON_NULL_COLUMNS = [
-    column_name for column_name in OUTPUT_COLUMNS if column_name != "pma_sso_pct_of_underlying"
+    column_name for column_name in OUTPUT_COLUMNS if column_name not in OUTPUT_ATTRIBUTE_COLUMNS
 ]
 
 GROUP_COLUMNS = [
-    "fc_run_year",
-    "version",
-    "fc_object_id",
-    "segment",
-    "fcy",
-    "forecast_scenario",
-    "poe",
-    "representative_day",
-    "season",
-    "day_type",
+    column_name for column_name in MODEL_INTERVAL_KEY_COLUMNS if column_name != "interval"
 ]
 
+# Spark schemas are used by validation reports and exact output contract checks.
 OUTPUT_SCHEMA = StructType(
     [
-        StructField("fc_run_year", IntegerType(), False),
-        StructField("version", StringType(), False),
         StructField("fc_object_id", IntegerType(), False),
-        StructField("segment", StringType(), True),
+        StructField("lga_segment", StringType(), False),
+        StructField("customer_type", StringType(), True),
         StructField("fcy", IntegerType(), False),
         StructField("forecast_scenario", StringType(), False),
-        StructField("poe", StringType(), False),
-        StructField("representative_day", StringType(), False),
         StructField("season", StringType(), False),
         StructField("day_type", StringType(), False),
+        StructField("representative_day", StringType(), False),
+        StructField("coincident_type", StringType(), False),
+        StructField("poe", StringType(), False),
         StructField("interval", IntegerType(), False),
-        StructField("pma_sso_mw", DoubleType(), False),
-        StructField("pma_sso_pct_of_underlying", DoubleType(), True),
+        StructField("delta_mw", DoubleType(), False),
     ]
 )
 
