@@ -1,0 +1,8 @@
+factor,value
+Scenario grid (p × κ),0.05–0.95 × 0.5–5.0 (10×10 cells)
+"Days, replicates, seed",D = 365; 20 replicates; seed 42
+"Backbone B, noise σ","10 kW, 1 kW"
+Fixed quantiles compared,"q = 0.1, q = 0.2, q = 0.3"
+Fallback quantile q_def,0.2
+Identifiability threshold,D_th = 2  (κ ≥ 2.83)
+Interval length Δt,0.5 h
