@@ -2,18 +2,18 @@
 
 Design rules:
   * Start from the PRISTINE backup so the IEEE 2-column section layout survives.
-  * Full prose, not notes: seven numbered sections, abstract and index terms.
+  * Full prose, not notes: four numbered sections, abstract and index terms.
   * HARD LIMIT of four pages including references. `preview.py` renders the
     built file through Word and reports the true page count - python-docx
     cannot paginate, so that is the only way to know. Several choices here
-    exist only to hold that limit: three figures rather than seven, one table
+    exist only to hold that limit: five figures rather than seven, one table
     rather than four, body space-after removed, equation leading halved.
   * Citations are IEEE numeric, numbered by order of first use in the text
     (see cite_number). The field result is plain text so the document reads
     without Zotero, and the CSL payload lets Zotero re-render it; the document
     preferences declare the IEEE style. A matching .ris is exported alongside.
   * Tables use the journal three-line rule and are kept whole across columns.
-  * Equations are native Word equation objects (OMML), right-numbered (1)..(8),
+  * Equations are native Word equation objects (OMML), right-numbered (1)..(6),
     with notation defined in the sentence around them rather than in a
     detached where-clause.
   * Wide figures sit in full-width (single-column) islands created with
@@ -806,7 +806,7 @@ def build_headline_table() -> tuple[pd.DataFrame, list, set, set]:
         ("mean_abs_rf_dev", "Mean\n|R_F \u2212 1|"),
         ("median_abs_rf_dev", "Median\n|R_F \u2212 1|"),
         ("median_abs_rf_dev_identifiable",
-         f"Median,\n\u03ba \u2265 {config.KAPPA_IDENTIFIABLE:.2f}"),
+         f"Median,\n$\u03ba$ \u2265 {config.KAPPA_IDENTIFIABLE:.2f}"),
         ("mean_mae_b", "MAE_B\n(kW)"),
     ]
     out = pd.DataFrame({"estimator": src["estimator"].map(
@@ -1074,7 +1074,7 @@ def main() -> None:
         "everywhere else.",
 
         "The contribution of this paper is to stop hand-picking. Rather than "
-        "choosing a quantile to split load into backbone and flexible, we derive "
+        "choosing a quantile to split the load, we derive "
         "the right quantile from the data at each timestamp – a method we call "
         "Adaptive Quantile Flexibility (AQF) – declare when the data "
         "cannot support that estimate, and map where the split is recoverable at "
@@ -1149,10 +1149,10 @@ def main() -> None:
 
         "A mixture returns parameters whether or not its two components are "
         "genuinely distinguishable, so the estimate is only as trustworthy as that "
-        "separation. AQF therefore gates on Ashman's diagnostic D̂_t = κ̂_t/√2 "
-        "(unrelated to the day count $D$), the standardised distance between the "
-        "fitted means [[ashman1994]], for which "
-        "$D̂$ ≥ D_th = 2 is the conventional requirement for a clean separation. "
+        "separation. AQF therefore gates on the standardised separation of the "
+        "fitted means, D̂_t = κ̂_t/√2 (not the day count $D$), requiring "
+        "$D̂$ ≥ D_th = 2 – a bimodality bar in the spirit of Ashman's D "
+        "[[ashman1994]] – which puts the identifiable region at $κ$ ≥ 2.83. "
         "Rather than switching abruptly at that threshold, the estimated quantile "
         "is blended towards a default quantile with weight w_t = min(D̂_t/D_th, 1),",
     ])
@@ -1162,8 +1162,7 @@ def main() -> None:
         "timestamp can ever be assigned a quantile above the median however the "
         "mixture behaves. A timestamp whose components are well separated uses its "
         "own estimate; one whose mixture is indistinguishable falls back to the "
-        "default; intermediate cases interpolate. The threshold corresponds to "
-        "$κ$ ≥ 2.83, and we call the region above it identifiable. Candidate "
+        "default; intermediate cases interpolate. Candidate "
         "flexibility on each day is then the non-negative excursion of the load "
         "above the estimated backbone. Derivations and implementation are given in "
         "full in the accompanying repository (github.com/mssamhan31/PyNTLP).",
@@ -1221,7 +1220,7 @@ def main() -> None:
         "Table {{tab:results}} reports accuracy over the grid. Ranked by the mean "
         "of |R_F − 1|, AQF at 1.54 and the best fixed quantile at 1.55 look "
         "indistinguishable, but that ranking is an artefact: the mean is dominated "
-        "by the rare-event cells where R_F reaches 30 to 50 for every estimator, "
+        "by the rare-event cells where R_F exceeds 15 for every estimator, "
         "including oracle-q, for a reason established below that is not the "
         "estimator's doing. On the median, which that tail does not dominate, AQF "
         "deviates by 0.26 against 0.60 for the best fixed quantile, a factor of "
@@ -1258,7 +1257,7 @@ def main() -> None:
             "against event frequency at $κ$ = 3, with the parameter-free noise-floor "
             "prediction (dotted).", COL_W)
     body(a, [
-        "Fig. {{fig:curves}} explains why. Fixed-quantile accuracy is flat in $κ$: a "
+        "Fig. {{fig:curves}} explains why. Fixed-quantile accuracy plateaus in $κ$: a "
         "constant cannot exploit a clearer signal, whereas AQF converges onto "
         "oracle-q – and above $κ$ ≈ 4 overtakes it on backbone error, consistent "
         "with a fitted curve avoiding sampling noise an empirical quantile "

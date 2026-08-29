@@ -64,6 +64,14 @@ data-calibrated estimate. That port has not been done and is out of scope for th
   moves as one block, so the text that fills the previous page's tail must be placed
   BEFORE the island in document order (the "Fig. 4 shows where..." paragraph is
   deliberately before the fig4 island for this reason).
+- `estimators.ashman_d` returns `kappa/sqrt(2)`, which is Ashman's D **rescaled by
+  1/sqrt(2)**: for a tied-variance mixture Ashman's own statistic evaluates to kappa
+  itself, so gating at D >= 2 here is the stricter bar kappa >= 2.83, not Ashman's
+  kappa > 2. The paper therefore says "a bimodality bar in the spirit of Ashman's D"
+  and does not claim the statistic IS Ashman's D. Do not relabel it, and do not
+  reinstate "the conventional requirement" wording. (Open option, not taken: define
+  D = kappa with D_th = 2*sqrt(2); the blend weight is algebraically identical, so
+  results would not change, but every figure annotation and slide would need editing.)
 - Terminology is unified as: "event frequency p" (never persistence), "event size kappa",
   "backbone", "candidate flexibility", "oracle-q". Oracle-q is deliberately NOT called an
   upper bound or ceiling - it takes an empirical quantile of D days, so AQF beats it on

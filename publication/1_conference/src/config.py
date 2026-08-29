@@ -37,11 +37,11 @@ BASE_SEED = 42
 # --- Estimators -----------------------------------------------------------
 FIXED_QS = [0.1, 0.2, 0.3]
 Q_DEFAULT = 0.2  # fallback quantile when the mixture is not identifiable
-D_THRESH = 2.0  # Ashman's D identifiability threshold (rule-of-thumb separation)
+D_THRESH = 2.0  # separation bar for D = kappa/sqrt(2) (see estimators.ashman_d)
 
 ESTIMATOR_VARIANTS = [f"fixed_q_{q}" for q in FIXED_QS] + ["oracle_aqf", "estimated_aqf"]
 
-# Smallest kappa at which the mixture clears the Ashman's D identifiability bar.
+# Smallest kappa at which the mixture clears the separation bar above.
 # Derived from D_THRESH so the "trustworthy region" quoted in the paper can never
 # drift from the fallback rule that actually gates the estimator (D = kappa/sqrt(2)).
 KAPPA_IDENTIFIABLE = float(np.sqrt(2.0) * D_THRESH)  # 2.828

@@ -56,7 +56,13 @@ def aqf_quantile(p_hat: float, kappa_hat: float) -> float:
 
 
 def identifiability_diagnostic(kappa_hat: float) -> float:
-    """Ashman's D separation statistic: D = kappa / sqrt(2)."""
+    """Standardised separation of the two fitted modes, D = kappa / sqrt(2).
+
+    Note this is Ashman's D rescaled by 1/sqrt(2): for a tied-variance
+    mixture Ashman's own statistic evaluates to kappa itself, so gating at
+    D >= 2 here is the stricter bar kappa >= 2.83, not Ashman's kappa > 2.
+    The paper says so; do not relabel this as Ashman's D.
+    """
     return kappa_hat / np.sqrt(2.0)
 
 
