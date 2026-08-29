@@ -1165,7 +1165,7 @@ def main() -> None:
         "default; intermediate cases interpolate. Candidate "
         "flexibility on each day is then the non-negative excursion of the load "
         "above the estimated backbone. Derivations and implementation are given in "
-        "full in the accompanying repository (github.com/mssamhan31/PyNTLP).",
+        "full in the accompanying repository (github.com/​mssamhan31/​PyNTLP).",
     ])
 
     subheading(a, "Experimental design")
@@ -1233,7 +1233,7 @@ def main() -> None:
         "quantile on that metric ($q$ = 0.2) manages only 0.538. Restricting "
         "further to event frequencies of 0.3 and above gives 0.0659 against "
         "0.0657: within the identifiable region, at moderate-to-high event "
-        "frequency, AQF matches a method told the true answer to within 0.0002. "
+        "frequency, AQF matches a method given the true parameters to within 0.0002. "
         "The identifiability test is therefore not a disclaimer but a statement "
         "of when the output can be relied upon.",
 

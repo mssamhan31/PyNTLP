@@ -54,6 +54,13 @@ data-calibrated estimate. That port has not been done and is out of scope for th
   build_docx.py, so add the key there when adding an item.
 - Citations are grouped numeric ([9, 10], [9-11]) and the document's Zotero style is set to
   Vancouver to match, so refreshing fields in Zotero does not revert the grouping.
+- The repository URL in II-B carries zero-width spaces (U+200B) after its slashes.
+  They are invisible and give Word somewhere to break a token that is otherwise
+  wider than half a column, which was stretching the justified line above it. Do
+  not "clean" them out.
+- Descriptive subscripts inside equations (F, B, def, th, day, shift) are wrapped in
+  `<m:rPr><m:nor /><m:sty m:val="p" /></m:rPr>` so they render upright like the body
+  text; running indices (t) stay bare, hence italic. Match that when adding an equation.
 - Reference-list titles are normalised to IEEE sentence case at RENDER time
   (`_sentence_case` in references.py); the CSL/RIS data keeps publisher casing, so
   Zotero imports stay faithful. Protected proper nouns live in `_PROTECTED`.
