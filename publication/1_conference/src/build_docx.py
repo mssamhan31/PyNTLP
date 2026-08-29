@@ -62,8 +62,8 @@ FIG = config.GOLD_FIGURES_DIR
 TABLES_DIR = config.GOLD_TABLES_DIR
 OMML_PATH = Path(__file__).with_name("equations_omml.json")
 
-TITLE = ("Adaptive Quantile Flexibility: Recoverability-Aware Backbone Estimation "
-         "from Aggregate Load Profiles")
+TITLE = ("Adaptive Quantile Flexibility: Recovering Candidate Flexible Load "
+         "from Aggregate Profiles for Network Tariff Modelling")
 
 # Derived from config so the width a figure is AUTHORED at (plotting.py) and the
 # width it is INSERTED at can never drift apart. If they drift, Word rescales the
@@ -315,9 +315,9 @@ _bookmark_id = [2000]
 
 # Document order, fixed up front so prose can reference a figure before the
 # figure is inserted.
-FIGURE_ORDER = ["decomp", "positioning", "mechanism", "map", "headline"]
+FIGURE_ORDER = ["decomp", "positioning", "mechanism", "map", "curves"]
 TABLE_ORDER = ["results"]
-EQUATION_ORDER = ["model", "relation", "qstar", "guard", "metrics"]
+EQUATION_ORDER = ["mvp", "model", "relation", "qstar", "guard", "metrics"]
 
 _ROMAN = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII"]
 
@@ -399,19 +399,31 @@ def ref_field(paragraph, kind: str, key: str, cached: str):
 # as real subscripts rather than printed with a literal underscore. The base is
 # italicised only when it is a single letter: multi-letter operators such as MAE
 # are upright by convention.
-SUBSCRIPT_RE = re.compile(r"\b(MAE|[REBFqD])_([A-Za-z0-9]{1,3})\b")
+# Base may carry a combining circumflex (D-hat, kappa-hat); w, p and kappa are
+# also legitimate subscripted symbols in the prose.
+SUBSCRIPT_RE = re.compile("\\b(MAE|[REBFqDwp\u03ba]\u0302?)_([A-Za-z0-9]{1,3})\\b")
+
+# Subscripts that are running indices are italic maths; descriptive subscripts
+# (F for flexible, def for default, th for threshold, day) stay upright.
+INDEX_SUBS = {"t", "i", "j", "n"}
+
+# IEEE sets every scalar variable in italic, in running text as well as in the
+# displayed equations. Prose marks those spans as $x$; the delimiters never
+# reach the page. Only letters go inside them - digits and operators stay
+# upright, so write "(1-$p$)/2", not "$(1-p)/2$".
+MATH_RE = re.compile(r"\$([^$]+)\$")
 
 
 XREF_RE = re.compile(r"\{\{(fig|tab|eq):([a-z_]+)\}\}")
 
 
 def add_plain_text(paragraph, text: str):
-    """Add text, expanding {{fig:key}}-style cross-references and NAME_SUB
-    tokens (rendered with a true subscript run)."""
+    """Add text, expanding {{fig:key}}-style cross-references, $x$ math spans
+    and NAME_SUB tokens (rendered with a true subscript run)."""
     pos = 0
     for m in XREF_RE.finditer(text):
         if m.start() > pos:
-            _add_subscripted(paragraph, text[pos:m.start()])
+            _add_math(paragraph, text[pos:m.start()])
         kind, key = m.group(1), m.group(2)
         cached = {"fig": lambda: str(figure_number(key)),
                   "tab": lambda: table_number(key),
@@ -419,22 +431,37 @@ def add_plain_text(paragraph, text: str):
         ref_field(paragraph, kind, key, cached)
         pos = m.end()
     if pos < len(text):
-        _add_subscripted(paragraph, text[pos:])
+        _add_math(paragraph, text[pos:])
 
 
-def _add_subscripted(paragraph, text: str):
+def _add_math(paragraph, text: str):
+    """Split on $...$ spans; everything inside one is italic maths."""
+    pos = 0
+    for m in MATH_RE.finditer(text):
+        if m.start() > pos:
+            _add_subscripted(paragraph, text[pos:m.start()], italic=False)
+        _add_subscripted(paragraph, m.group(1), italic=True)
+        pos = m.end()
+    if pos < len(text):
+        _add_subscripted(paragraph, text[pos:], italic=False)
+
+
+def _add_subscripted(paragraph, text: str, italic: bool = False):
     pos = 0
     for m in SUBSCRIPT_RE.finditer(text):
         if m.start() > pos:
-            paragraph.add_run(text[pos:m.start()])
+            paragraph.add_run(text[pos:m.start()]).italic = italic
         base, sub = m.group(1), m.group(2)
         base_run = paragraph.add_run(base)
-        base_run.italic = len(base) == 1
+        # Single-letter bases (hatted or not) are italic maths; multi-letter
+        # operators such as MAE stay upright.
+        base_run.italic = len(base.replace("̂", "")) == 1
         sub_run = paragraph.add_run(sub)
         sub_run.font.subscript = True
+        sub_run.italic = sub in INDEX_SUBS
         pos = m.end()
     if pos < len(text):
-        paragraph.add_run(text[pos:])
+        paragraph.add_run(text[pos:]).italic = italic
 
 
 def add_rich_text(paragraph, text: str):
@@ -467,6 +494,7 @@ def picture(anchor, key: str, image_name: str, caption: str, width):
     p = anchor.insert_paragraph_before()
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
     p.paragraph_format.space_before = Pt(6)
+    p.paragraph_format.keep_with_next = True    # image stays with caption
     p.add_run().add_picture(str(FIG / image_name), width=width)
 
     cap = anchor.insert_paragraph_before(style="figure caption")
@@ -754,7 +782,7 @@ ORACLE_LABEL = "Oracle-AQF"          # key used in the Gold CSV
 # Printed names. "Oracle" is jargon for a non-specialist reader, so the row is
 # labelled by what it actually is: a bound computed with the true values.
 DISPLAY_LABELS = {
-    "Oracle-AQF": "Upper bound",
+    "Oracle-AQF": "Oracle-q",
     "Estimated-AQF": "AQF",
     "Fixed q=0.3": "Fixed q = 0.3",
     "Fixed q=0.2": "Fixed q = 0.2",
@@ -766,9 +794,11 @@ def build_headline_table() -> tuple[pd.DataFrame, list, set, set]:
     """Table III: the four numbers the Results section actually argues from.
 
     Returns the printable frame plus the headers, the cells to bold, and the
-    rows to italicise. The oracle knows the true p and kappa, so it is a ceiling
-    rather than a competitor: its row is italicised and it is excluded from the
-    best-in-column bolding, which would otherwise imply it was on offer.
+    rows to italicise. Oracle-q knows the true p and kappa, so it is a reference
+    rather than a competitor: its row is italicised and excluded from the
+    best-in-column bolding. It is NOT a performance ceiling - it still takes an
+    empirical quantile of D days, so AQF beats it on backbone error wherever the
+    signal is strong.
     """
     src = pd.read_csv(TABLES_DIR / "table3_headline_results.csv")
     # Stacked headers: five columns have to fit one 3.3-inch IEEE column.
@@ -777,7 +807,7 @@ def build_headline_table() -> tuple[pd.DataFrame, list, set, set]:
         ("median_abs_rf_dev", "Median\n|R_F \u2212 1|"),
         ("median_abs_rf_dev_identifiable",
          f"Median,\n\u03ba \u2265 {config.KAPPA_IDENTIFIABLE:.2f}"),
-        ("mean_mae_b", "Mean\nMAE_B"),
+        ("mean_mae_b", "MAE_B\n(kW)"),
     ]
     out = pd.DataFrame({"estimator": src["estimator"].map(
         lambda v: DISPLAY_LABELS.get(v, v))})
@@ -818,9 +848,10 @@ ABSTRACT = (
     "Solar Sharer Offer in New South Wales, for example, gives households free "
     "electricity in the middle of the day. Sizing the effect of such an offer "
     "first requires knowing how much of the load at each time of day could "
-    "actually move. That quantity is normally assumed rather than measured - "
+    "actually move. In the models utilities can run today it is assumed rather "
+    "than measured – "
     "either as a single shiftable fraction of daily energy applied everywhere, or "
-    "through a bottom-up appliance model needing data utilities do not hold. The "
+    "through a bottom-up appliance model needing data that utilities do not hold. The "
     "practical middle ground takes the non-shiftable \u201cbackbone\u201d to be a fixed low "
     "quantile of the loads recorded at the same time of day across many days, but "
     "that quantile is hand-picked and one value is applied to every time of day. "
@@ -830,10 +861,10 @@ ABSTRACT = (
     "closed form and use it to build Adaptive Quantile Flexibility (AQF), which "
     "computes the quantile separately at each timestamp from the meter data "
     "alone, declares when the data cannot support that estimate and falls back to "
-    "a safe default, and never exceeds the median. Tested on synthetic load "
-    "profiles where the true split is known by construction, AQF halves the median "
-    "recovery error against the best fixed quantile and reduces backbone error "
-    "roughly threefold."
+    "a default quantile, and never exceeds the median. Tested on synthetic load "
+    "profiles where the true split is known by construction, AQF more than halves "
+    "the median error in recovered flexible energy relative to the best fixed "
+    "quantile and cuts backbone error roughly threefold."
 )
 
 KEYWORDS = ("demand flexibility, demand response, load disaggregation, quantile "
@@ -917,7 +948,7 @@ def validate_docx(path: Path) -> None:
     if problems:
         for p in dict.fromkeys(problems):
             print("  INVALID:", p)
-        raise SystemExit(f"{len(problems)} OOXML problem(s) - Word would refuse this file.")
+        raise SystemExit(f"{len(problems)} OOXML problem(s) – Word would refuse this file.")
     print("Structure check: OK")
 
 
@@ -967,51 +998,55 @@ def main() -> None:
 
     # ================= I. INTRODUCTION ===================================
     body(a, [
-        "Network businesses increasingly use retail tariffs to change when "
-        "electricity is used rather than how much of it is used. In New South "
-        "Wales, the Solar Sharer Offer gives households free electricity in the "
-        "middle of the day, with the explicit aim of moving discretionary "
-        "consumption into the hours when rooftop solar output is highest. Before "
-        "an offer of this kind is rolled out, its effect has to be estimated: what "
-        "the load profile becomes, where the new peak sits, and how deep the "
-        "midday minimum goes [[palensky2011]].",
+        "Network businesses are beginning to use retail tariffs to change when "
+        "electricity is used. In New South Wales, the Solar Sharer Offer gives "
+        "households free electricity in the middle of the day to pull "
+        "discretionary consumption into the solar peak. Before rollout its effect "
+        "has to be estimated: what the load profile becomes, where the new peak "
+        "sits, and how deep the midday minimum goes [[palensky2011]].",
 
-        "That estimate depends on one quantity the tariff itself cannot supply - "
+        "That estimate depends on one quantity the tariff itself cannot supply – "
         "how much of the load at each time of day is genuinely able to move. At "
-        "the scale of a distribution network the answer has to come from data the "
-        "utility already holds, and smart meters record only the total energy "
-        "drawn in each interval: not which appliances produced it, and not which "
-        "part of it could have been deferred [[kwac2014|wang2019]]. "
+        "network scale the answer must come from data the utility already holds, "
+        "and smart meters record only the total energy drawn in each interval: "
+        "not which appliances drew it, and not which part could have been "
+        "shifted [[kwac2014|wang2019]]. "
         "Fig. {{fig:decomp}} shows the resulting difficulty at a single time of "
-        "day. On most days the reading reflects ordinary, non-deferrable activity; "
+        "day. On most days the reading reflects ordinary, non-shiftable activity; "
         "on a minority it also contains a flexible event such as an "
         "electric-vehicle charge or a pool-pump cycle. We call the persistent part "
-        "the backbone and the additional part the flexibility to be sized. The "
+        "the backbone and the additional part the candidate flexibility to be sized. The "
         "meter reports only their sum, and nothing in the record says which days "
         "contained an event.",
     ])
     picture(a, "decomp", "fig1_decomposition.png",
             "Load at one fixed time of day across forty days. On event days "
-            "(markers) a flexible load adds to the backbone B; the meter reports "
+            "(markers) a flexible load adds to the backbone $B$; the meter reports "
             "only the total, and a high reading is not by itself evidence of an "
             "event.", COL_W)
     body(a, [
-        "In practice the shiftable share is assumed rather than measured. The "
-        "common assumption is a single scalar fraction of daily energy - say 15% - "
-        "applied uniformly across customers and across the day. It is trivial to "
-        "implement and completely transparent, but it is blind to the time of day, "
-        "to the customer mix, and to whether the flexible load is visible in the "
-        "data at all; whatever error it makes passes straight into the modelled "
-        "profile.",
+        "In operational models the shiftable share is assumed rather than "
+        "measured. In ours – PyNTLP (Python for Network Tariff to Load Profile) – "
+        "the energy shifted into the free window on a given day is estimated as",
+    ])
+    equation(a, omml[8], "mvp")
+    body(a, [
+        "where E_day is the day's baseline energy (the only measured term), $s$ is a "
+        "hand-picked shiftable fraction of that energy, $k$ is an assumed "
+        "response-intensity factor, and $a$ is the assumed adoption rate among "
+        "eligible customers. This paper addresses $s$. One value is applied to every "
+        "customer and every time of day, it says nothing about whether flexible "
+        "load is even visible in the data, and the modelled impact scales linearly "
+        "with it – so its error passes straight into the network case.",
 
-        "The alternative is to build the load up appliance by appliance. That is "
-        "physically faithful but needs ownership and usage data that is expensive "
-        "to collect and rarely available at network scale, and it generalises "
-        "poorly: appliances differ between households, and once many customers are "
-        "aggregated the individual switching patterns smooth out. Non-intrusive "
-        "load monitoring meets the same barrier, needing sub-metered training data "
-        "[[hart1992]], while customer-baseline methods estimate a counterfactual "
-        "for a known event window and so presuppose the event times "
+        "Alternatives exist, but none of the standard ones fits the setting. "
+        "Bottom-up appliance models "
+        "are physically faithful but need ownership and usage data that is rarely "
+        "available at network scale [[wang2019]], and individual switching "
+        "patterns smooth out "
+        "under aggregation. Non-intrusive load monitoring needs sub-metered "
+        "training data [[hart1992]], while customer-baseline methods estimate a "
+        "counterfactual for a known event window and so presuppose the event times "
         "[[mathieu2011|valentini2022|zhang2016]].",
 
         "What is needed is something between the two: practical enough to run from "
@@ -1020,35 +1055,34 @@ def main() -> None:
         "axes.",
     ])
     picture(a, "positioning", "fig2_positioning.png",
-            "Candidate methods on practicality against physical representativeness. "
-            "AQF keeps the data requirement of a quantile while removing the "
-            "arbitrary choice.", COL_W)
+            "Alternative methods on physical representativeness against "
+            "practicality; the proposed method keeps the data requirement of a "
+            "quantile while removing the arbitrary choice.", COL_W)
     body(a, [
-        "That established compromise is to take a low quantile of the across-day "
-        "distribution as the backbone [[koenker1978]]. It needs nothing beyond the "
-        "aggregate profile. Its weakness is that the quantile is fixed by "
-        "convention - typically between the tenth and thirtieth percentile - and "
-        "the same value is then applied at every time of day.",
+        "The pragmatic compromise is to take a low quantile of the across-day "
+        "distribution as the backbone. It needs nothing beyond the aggregate "
+        "profile. Its weakness is that the quantile is hand-picked – a convention "
+        "rather than an estimate – and the same value is then applied at every "
+        "time of day.",
 
         "This is the problem the paper addresses. The quantile that actually lands "
         "on the backbone is not a constant. It depends on how often flexible "
         "events occur at that timestamp and on how large they are relative to "
         "ordinary day-to-day variation, and both change through the day. A "
         "hand-picked quantile is therefore correct only under a narrow set of "
-        "conditions, and carries an uncontrolled - and invisible - error "
+        "conditions, and carries an uncontrolled – and invisible – error "
         "everywhere else.",
 
         "The contribution of this paper is to stop hand-picking. Rather than "
         "choosing a quantile to split load into backbone and flexible, we derive "
-        "the right quantile from the data at each timestamp, declare when the data "
+        "the right quantile from the data at each timestamp – a method we call "
+        "Adaptive Quantile Flexibility (AQF) – declare when the data "
         "cannot support that estimate, and map where the split is recoverable at "
-        "all. Concretely, the quantile is computed from a closed-form relation "
-        "between the backbone bias, the event frequency and the event size, the "
-        "last two being estimated per timestamp by fitting a two-component mixture "
-        "to the loads recorded at that time of day; a separation diagnostic decides "
-        "whether that fit can be trusted and blends the estimate back toward a safe "
-        "default when it cannot; and the result is capped at the median, so no "
-        "timestamp is ever assigned a quantile above 0.50. The method is evaluated "
+        "all. The quantile comes from a closed-form relation between backbone "
+        "bias, event frequency and event size, the last two estimated per "
+        "timestamp by fitting a two-component mixture; a separation diagnostic "
+        "blends the estimate towards a default quantile when the fit cannot be "
+        "trusted; and the result is capped at the median. The method is evaluated "
         "on synthetic profiles in which the true split is known by construction, "
         "against fixed quantiles at three conventional values.",
     ])
@@ -1057,67 +1091,70 @@ def main() -> None:
     heading(a, "Methodology")
     subheading(a, "Problem formulation")
     body(a, [
-        "Fix one time of day - say 18:30 - and consider the load recorded at that "
-        "time on each of D days. Writing L for that reading, we model it as",
+        "Fix one time of day – a timestamp, say 18:30 – and consider the load "
+        "recorded at that timestamp on each of $D$ days. Writing $L$ for that "
+        "reading, we model it as",
     ])
     equation(a, omml[0], "model")
     body(a, [
-        "where B is the backbone level, Z indicates whether a flexible event "
-        "occurred on that day, A is the event magnitude, and ε is ordinary "
-        "variation with standard deviation σ. Events occur independently with "
-        "probability p, the event frequency at that timestamp. The across-day "
-        "distribution of L is therefore a mixture of two Gaussians: a non-event "
-        "component centred on B with weight 1−p, and an event component centred on "
-        "B+A with weight p.",
+        "where $B$ is the backbone level, $Z$ is a Bernoulli indicator of whether a "
+        "flexible event occurred on that day, $A$ is the event magnitude, and $ε$ is "
+        "ordinary "
+        "variation with standard deviation $σ$. Events occur independently with "
+        "probability $p$, the event frequency at that timestamp. The across-day "
+        "distribution of $L$ is therefore a mixture of two Gaussians: a non-event "
+        "component centred on $B$ with weight 1−$p$, and an event component centred on "
+        "$B$+$A$ with weight $p$.",
 
-        "Two derived quantities govern what follows: the event size relative to "
-        "ordinary variation, κ = A/σ, and the backbone bias b, the error of an "
-        "estimate in the same units. It is κ, not p, that decides whether the two "
+        "Two derived quantities govern what follows: the event size $κ$ = $A$/$σ$, the "
+        "event magnitude relative to ordinary variation, and the backbone bias "
+        "$b$ = ($B̂$ − $B$)/$σ$, the error of a backbone estimate $B̂$ in units of $σ$. It is $κ$, not $p$, that decides whether the two "
         "components can be told apart. Fig. {{fig:mechanism}} makes this concrete: "
-        "raising κ pushes the two modes apart until the distribution is visibly "
-        "bimodal, whereas raising p merely moves mass into the event mode. If the "
-        "backbone is estimated as the q-quantile of the observed loads, the bias "
-        "satisfies",
+        "raising $κ$ pushes the two modes apart until the distribution is visibly "
+        "bimodal, whereas raising $p$ merely moves mass into the event mode. If the "
+        "backbone is estimated as the $q$-quantile of the observed loads "
+        "[[koenker1978]], the bias satisfies",
     ])
     equation(a, omml[2], "relation")
     body(a, [
         "where Φ is the standard normal distribution function. Equation "
-        "({{eq:relation}}) is the central relation of the paper: for given p and "
-        "κ, exactly one quantile places the estimate on B, so a fixed quantile is "
-        "unbiased only along a one-dimensional curve in the (p, κ) plane.",
+        "({{eq:relation}}) is the central relation of the paper: for given $p$ and "
+        "$κ$, exactly one quantile places the estimate on $B$, so a fixed quantile is "
+        "unbiased only along a one-dimensional curve in the ($p$, $κ$) plane.",
     ])
     full_width(a, lambda anc: picture(
         anc, "mechanism", "fig3_mechanism.png",
         "Across-day load distribution at one timestamp, and the backbone each rule "
-        "selects. (a) to (b): event size κ grows at fixed frequency, separating the "
-        "modes. (b) to (c): frequency p grows at fixed κ, enlarging the event mode "
-        "without separating it. The fixed quantile drifts either side of B; the "
+        "selects. (a) to (b): event size $κ$ grows at fixed frequency, separating the "
+        "modes. (b) to (c): frequency $p$ grows at fixed $κ$, enlarging the event mode "
+        "without separating it. The fixed quantile drifts either side of $B$; the "
         "adaptive quantile tracks it.", FULL_W))
 
-    subheading(a, "Adaptive quantile flexibility")
+    subheading(a, "Adaptive Quantile Flexibility")
     body(a, [
-        "Setting b = 0 in ({{eq:relation}}) and solving for q gives the "
-        "bias-minimising quantile at timestamp t,",
+        "Setting $b$ = 0 in ({{eq:relation}}) and solving for $q$ gives the "
+        "bias-minimising quantile at timestamp $t$, in which p̂_t and κ̂_t denote "
+        "per-timestamp estimates of $p$ and $κ$,",
     ])
     equation(a, omml[3], "qstar")
     body(a, [
         "The correct quantile moves continuously between one half when events are "
-        "absent and (1−p)/2 when they are fully separated - precisely what a fixed "
-        "choice cannot follow. In practice p and κ are unknown, so AQF estimates them: at each timestamp "
+        "absent and (1−$p$)/2 when they are fully separated – precisely what a fixed "
+        "choice cannot follow. In practice $p$ and $κ$ are unknown, so AQF estimates them: at each timestamp "
         "we fit a two-component Gaussian mixture with tied variance to the "
         "across-day readings by expectation-maximisation [[dempster1977|mclachlan2000]], "
         "using scikit-learn [[pedregosa2011]]. The lower-mean component is taken as "
-        "the non-event state, so the upper component's weight estimates p and the "
-        "standardised separation of the means estimates κ.",
+        "the non-event state, so the upper component's weight estimates $p$ and the "
+        "standardised separation of the means estimates $κ$.",
 
         "A mixture returns parameters whether or not its two components are "
         "genuinely distinguishable, so the estimate is only as trustworthy as that "
-        "separation. AQF therefore gates on Ashman's diagnostic, the standardised "
-        "distance between the fitted means κ̂/√2 [[ashman1994]], for which a value "
-        "of at least two is the conventional requirement for a clean separation. "
+        "separation. AQF therefore gates on Ashman's diagnostic D̂_t = κ̂_t/√2 "
+        "(unrelated to the day count $D$), the standardised distance between the "
+        "fitted means [[ashman1994]], for which "
+        "$D̂$ ≥ D_th = 2 is the conventional requirement for a clean separation. "
         "Rather than switching abruptly at that threshold, the estimated quantile "
-        "is blended toward a fixed default in proportion to the confidence the "
-        "diagnostic expresses,",
+        "is blended towards a default quantile with weight w_t = min(D̂_t/D_th, 1),",
     ])
     equation(a, omml[5], "guard")
     body(a, [
@@ -1126,36 +1163,43 @@ def main() -> None:
         "mixture behaves. A timestamp whose components are well separated uses its "
         "own estimate; one whose mixture is indistinguishable falls back to the "
         "default; intermediate cases interpolate. The threshold corresponds to "
-        "κ ≥ 2.83, and we call the region above it identifiable. Candidate "
+        "$κ$ ≥ 2.83, and we call the region above it identifiable. Candidate "
         "flexibility on each day is then the non-negative excursion of the load "
-        "above the estimated backbone. Derivations and the fallback weighting are "
-        "given in full in the public repository.",
+        "above the estimated backbone. Derivations and implementation are given in "
+        "full in the accompanying repository (github.com/mssamhan31/PyNTLP).",
     ])
 
     subheading(a, "Experimental design")
     body(a, [
-        "Ground truth for the flexible share does not exist in field data - that "
-        "absence is the problem itself - so AQF is evaluated on synthetic data, in "
+        "Ground truth for the flexible share does not exist in the aggregate "
+        "meter data utilities hold – that absence is the problem itself – so AQF "
+        "is evaluated on synthetic data, in "
         "which the backbone, the event magnitude and the event indicators are all "
-        "known by construction. For each scenario we draw D = 365 days from "
+        "known by construction. For each scenario we draw $D$ = 365 days from "
         "({{eq:model}}), estimate the backbone with each estimator, score the "
         "residual against the known flexible energy, and aggregate over repeats.",
 
         "Scenarios span ten event frequencies from 0.05 to 0.95 and ten event sizes "
-        "from 0.5 to 5.0, with 20 seeded repeats in each of the 100 combinations - "
-        "10,000 estimator runs. The ranges span values reported for domestic "
-        "appliances in UK-DALE, REFIT and the NREL end-use load profiles "
+        "from 0.5 to 5.0, with 20 seeded repeats in each of the 100 combinations – "
+        "10,000 estimator runs, each with $B$ = 10 kW and $σ$ = 1 kW. The ranges span "
+        "values reported for domestic "
+        "appliances in the UK-DALE and REFIT appliance-level datasets and the "
+        "National Renewable Energy Laboratory (NREL) end-use load profiles "
         "[[kelly2015|murray2017|wilson2022]]. Five estimators are compared: fixed "
-        "quantiles at 0.1, 0.2 and 0.3; an upper bound given the true p and κ; and "
-        "AQF itself, which sees only the load. Two metrics are reported,",
+        "quantiles at 0.1, 0.2 and 0.3; oracle-q, given the true $p$ and $κ$; and AQF "
+        "itself, which sees only the load. Oracle-q isolates the cost of estimating "
+        "$p$ and $κ$, but it is not a performance ceiling: it still takes an empirical "
+        "quantile of $D$ days. Two metrics are reported,",
     ])
     equation(a, omml[7], "metrics")
     body(a, [
         "The recovery ratio R_F is estimated flexible energy divided by true "
-        "flexible energy, so 1 is perfect recovery, above 1 over-estimation and "
-        "below 1 under-estimation. MAE_B is the mean absolute error of the "
-        "backbone level itself; unlike R_F it is unaffected by the truncation "
-        "discussed in Section III.",
+        "flexible energy, so 1 is perfect recovery, above 1 over-recovery and "
+        "below 1 under-recovery; accuracy is summarised as the absolute "
+        "deviation |R_F − 1|. MAE_B is the mean absolute error of the backbone "
+        "level, averaged over the $N$ scored estimates – one per run, each at "
+        "its own timestamp $t$; unlike R_F it is unaffected by the non-negative "
+        "truncation introduced in Section II-B.",
     ])
 
     # ================= III. RESULTS ======================================
@@ -1164,9 +1208,10 @@ def main() -> None:
     t3, t3_headers, t3_bold, t3_italic = build_headline_table()
     table_caption(a, "results",
                   "Estimator accuracy over the 100 combinations of event frequency "
-                  "and event size. Best deployable value per column in bold; the "
-                  "upper-bound row (italic) is given the true values and is a "
-                  "ceiling, not an available baseline.")
+                  "and event size. Best deployable value per column in bold. "
+                  "Oracle-q (italic) is given the true event frequency and event "
+                  "size; it is a reference, not an available baseline and not a "
+                  "performance ceiling.")
     dataframe_table(
         doc, a, t3,
         [Inches(0.86), Inches(0.60), Inches(0.62), Inches(0.60), Inches(0.62)],
@@ -1177,82 +1222,70 @@ def main() -> None:
         "of |R_F − 1|, AQF at 1.54 and the best fixed quantile at 1.55 look "
         "indistinguishable, but that ranking is an artefact: the mean is dominated "
         "by the rare-event cells where R_F reaches 30 to 50 for every estimator, "
-        "including the upper bound, for a reason established below that is not the "
+        "including oracle-q, for a reason established below that is not the "
         "estimator's doing. On the median, which that tail does not dominate, AQF "
         "deviates by 0.26 against 0.60 for the best fixed quantile, a factor of "
-        "2.3; on backbone error, which the effect does not touch at all, the gap "
-        "is 0.26 kW against 0.75 kW.",
+        "2.3. On backbone error, which the effect does not touch at all, AQF "
+        "reaches 0.26 kW against 0.75 kW for the best fixed quantile on that "
+        "metric ($q$ = 0.2).",
 
-        "The identifiable region sharpens the comparison: there the median "
-        "deviation is 0.114 for AQF against 0.105 for the upper bound, while the "
-        "best fixed quantile manages only 0.538. Restricting further to event "
-        "frequencies of 0.3 and above gives 0.0659 against 0.0657 - within the "
-        "region its own diagnostic certifies, AQF is indistinguishable from a "
-        "method told the true answer. This is what makes the identifiability test "
-        "earn its place: it is not a disclaimer attached to the output but an "
-        "accurate statement about when the output can be relied upon.",
+        "The identifiable region sharpens the comparison: there the median deviation "
+        "is 0.114 for AQF against 0.105 for oracle-q, while the best fixed "
+        "quantile on that metric ($q$ = 0.2) manages only 0.538. Restricting "
+        "further to event frequencies of 0.3 and above gives 0.0659 against "
+        "0.0657: within the identifiable region, at moderate-to-high event "
+        "frequency, AQF matches a method told the true answer to within 0.0002. "
+        "The identifiability test is therefore not a disclaimer but a statement "
+        "of when the output can be relied upon.",
+
+        "Fig. {{fig:map}} shows where each estimator works. The fixed quantile is "
+        "unbiased only along a narrow contour and under-recovers badly when events "
+        "are frequent and large, where a quantile fixed at 0.3 cuts into the event "
+        "mode itself; AQF removes almost all of that region. Cell by cell, AQF "
+        "beats fixed quantiles of 0.1, 0.2 and 0.3 in 95, 89 and 58 of the 100 "
+        "cells, and a per-cell hindsight choice in 44 – reported deliberately, "
+        "since deploying that choice requires knowing what AQF estimates.",
     ])
     full_width(a, lambda anc: picture(
         anc, "map", "fig4_recoverability_map.png",
-        "Recovery ratio over the grid for (a) the strongest fixed quantile, (b) AQF "
-        "and (c) the upper bound. White is perfect recovery, red over- and blue "
+        "Recovery ratio R_F over the grid for (a) the best fixed quantile, (b) "
+        "AQF and (c) oracle-q. White is perfect recovery, red over- and blue "
         "under-recovery on a log₂ scale capped at eight; the contour marks R_F = 1 "
         "and the dashed line the identifiability threshold.", FULL_W))
+    picture(a, "curves", "fig5_curves.png",
+            "(a) Median |R_F − 1| and (b) mean backbone error against event size, "
+            "shaded where the diagnostic clears its threshold. (c) Recovery ratio "
+            "against event frequency at $κ$ = 3, with the parameter-free noise-floor "
+            "prediction (dotted).", COL_W)
     body(a, [
-        "Fig. {{fig:map}} shows where each estimator works. The fixed quantile is "
-        "unbiased only along a narrow contour and under-recovers badly when events "
-        "are both frequent and large, because a quantile fixed at 0.3 then cuts "
-        "into the event mode itself; AQF removes almost all of that region. Cell "
-        "by cell, AQF beats fixed quantiles of 0.1, 0.2 and 0.3 in 95, 89 and 58 "
-        "of the 100 cells, and a per-cell hindsight choice in 44. All four are "
-        "reported deliberately: the last is not deployable, since choosing it "
-        "requires knowing what AQF exists to estimate.",
-    ])
-    full_width(a, lambda anc: picture(
-        anc, "headline", "fig5_headline_evidence.png",
-        "(a) Median |R_F − 1| and (b) mean backbone error against event size. "
-        "Shading marks where the diagnostic clears its threshold; inside it AQF "
-        "converges onto the upper bound while every fixed quantile stays flat. "
-        "(c) Recovery ratio against event frequency, with the parameter-free "
-        "noise-floor prediction (dotted).", FULL_W))
-    body(a, [
-        "Fig. {{fig:headline}} explains why. Fixed-quantile accuracy is flat in κ: a "
-        "constant quantile cannot exploit a clearer signal. AQF converges onto the "
-        "upper bound as κ rises, because the mixture becomes easier to fit exactly "
-        "as the quantity it estimates becomes better determined.",
+        "Fig. {{fig:curves}} explains why. Fixed-quantile accuracy is flat in $κ$: a "
+        "constant cannot exploit a clearer signal, whereas AQF converges onto "
+        "oracle-q – and above $κ$ ≈ 4 overtakes it on backbone error, consistent "
+        "with a fitted curve avoiding sampling noise an empirical quantile "
+        "carries even given the true parameters.",
 
-        "The remaining error at low event frequency is not estimator bias. Because "
-        "candidate flexibility is a non-negative excursion, every non-event day adds "
-        "σ/√(2π) ≈ 0.399σ of spurious flexibility even with an exact backbone, "
-        "predicting R_F = 1 + (1−p)(2π)^(−1∕2)/(pκ) with no fitted parameter. The "
-        "upper bound follows it to a median ratio of 1.006, so the large ratios at "
-        "low frequency are a property of the truncated residual estimator.",
+        "The remaining error at low event frequency is not estimator bias: every "
+        "non-event day adds $σ$/√(2π) ≈ 0.399$σ$ of spurious flexibility even with an "
+        "exact backbone, predicting the noise floor R_F = 1 + (1−$p$)/($pκ$√(2π)) "
+        "with no fitted "
+        "parameter. Oracle-q follows it to a median ratio of 1.006, so those large "
+        "ratios are a property of the truncated-residual estimator.",
     ])
 
     # ================= IV. DISCUSSION AND CONCLUSION =====================
     heading(a, "Discussion and Conclusion")
     body(a, [
-        "Fixed-quantile backbone estimation needs only the aggregate load profile, "
-        "but the quantile it applies is a convention rather than an estimate, and its "
-        "bias varies with quantities the analyst never sees. This paper derived the "
-        "relation those quantities satisfy and replaced the convention with a "
-        "per-timestamp estimate, gated by a diagnostic that reports when it should "
-        "not be trusted and capped at the median. The cost is one mixture fit per "
-        "timestamp; the gain is roughly a halving of median recovery error, a "
-        "threefold reduction in backbone error, and parity with a method given the "
-        "true answer inside the certified region.",
-
-        "Three limitations bound these claims. Good recovery shows statistical "
-        "identifiability of a shape, not physical shiftability, so the output is "
-        "candidate flexibility, not a dispatchable quantity. The evaluation is "
-        "synthetic and the assumed mixture correct by construction, so it measures "
-        "how well AQF exploits a correct model rather than its robustness to "
-        "misspecification. And the noise floor bounds any estimator built on a "
-        "truncated residual. Next steps are to validate the estimated frequency "
-        "and size against UK-DALE and REFIT ground truth [[kelly2015|murray2017]], "
-        "then replace the hand-picked shiftable fraction in our tariff-to-profile "
-        "model with the calibrated estimate, so offers such as the Solar Sharer "
-        "Offer can be assessed from measured behaviour, not an assumed constant.",
+        "The quantile a fixed-quantile estimator applies is a convention, not an "
+        "estimate, and its bias varies with quantities the analyst never sees. This "
+        "paper derived the relation those quantities satisfy and replaced the "
+        "convention with a per-timestamp estimate, gated by a diagnostic that "
+        "reports when it should not be trusted and capped at the median. Three "
+        "limitations bound the claim: good recovery shows identifiability of a "
+        "shape, not physical shiftability; the evaluation is synthetic; and the "
+        "noise floor bounds any truncated-residual estimator. Next steps are to "
+        "validate the estimated $p$ and $κ$ against UK-DALE and REFIT ground truth "
+        "[[kelly2015|murray2017]], then replace the hand-picked fraction $s$ in "
+        "({{eq:mvp}}) with the calibrated per-timestamp estimate.",
     ])
 
     # ================= REFERENCES ========================================
@@ -1265,8 +1298,10 @@ def main() -> None:
         raise SystemExit(f"references defined but never cited: {sorted(uncited)}")
     bib_paras = []
     for n, key in enumerate(_cite_order, start=1):
-        p = a.insert_paragraph_before(f"[{n}]	{refs.ieee_entry(key)}",
-                                      style="references")
+        p = a.insert_paragraph_before(style="references")
+        p.add_run(f"[{n}]\t")
+        for seg, ital in refs.ieee_entry_parts(key):
+            p.add_run(seg).italic = ital
         unnumber(p)
         p.paragraph_format.left_indent = Inches(0.22)
         p.paragraph_format.first_line_indent = Inches(-0.22)   # number hangs left
@@ -1286,8 +1321,8 @@ def main() -> None:
     # Zotero document preferences, parked in the trailing paragraph. The style is
     # IEEE so that refreshing the fields in Zotero reproduces what is written here.
     prefs = doc.paragraphs[-1]
-    # This paragraph is structural - it carries the final 2-column sectPr and
-    # cannot be deleted - but at full body size its empty mark alone spills onto
+    # This paragraph is structural – it carries the final 2-column sectPr and
+    # cannot be deleted – but at full body size its empty mark alone spills onto
     # a fifth page. Collapse it to 1 pt with no leading.
     set_mark_size(prefs, 2)
     kill_autospacing(prefs)

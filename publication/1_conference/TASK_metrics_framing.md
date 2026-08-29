@@ -1,5 +1,10 @@
 # TASK — fix the results framing, then regenerate
 
+> STATUS 2026-08-29: implemented. The median/identifiable-region framing, the
+> win-count reporting, `KAPPA_IDENTIFIABLE`, and the docx updates below are all
+> in place, and the noise floor is additionally characterised in closed form in
+> the paper. Kept for the reproduce-snippet and the historical rationale.
+
 Written 2026-08-28. Deadline for ISGT Asia submission: **10 Sep 2026**.
 
 ## The problem

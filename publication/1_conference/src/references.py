@@ -331,8 +331,37 @@ def _ieee_authors(authors: list[dict]) -> str:
     return ", ".join(names[:-1]) + ", and " + names[-1]
 
 
-def ieee_entry(key: str) -> str:
-    """One IEEE-style reference-list entry, without its leading number."""
+# Words the sentence-caser must not lowercase (proper nouns whose capitalisation
+# the multi-capital heuristic below cannot detect).
+_PROTECTED = {"United", "Kingdom", "Python", "U.S."}
+
+
+def _sentence_case(title: str) -> str:
+    """IEEE sentence case for article/report titles: capitalise the first word
+    and the first word after a colon; keep acronyms and proper nouns."""
+    def lower_part(part: str) -> str:
+        if part in _PROTECTED or sum(ch.isupper() for ch in part) >= 2:
+            return part
+        return part[0].lower() + part[1:] if part else part
+
+    out = []
+    cap_next = True
+    for w in title.split(" "):
+        parts = w.split("-")
+        keep_first = 1 if cap_next else 0
+        out.append("-".join(parts[:keep_first] +
+                            [lower_part(p) for p in parts[keep_first:]]))
+        cap_next = w.endswith(":")
+    return " ".join(out)
+
+
+def ieee_entry_parts(key: str) -> list[tuple[str, bool]]:
+    """One IEEE reference-list entry as (text, italic) segments.
+
+    IEEE italicises the journal name and the book title; article titles stay
+    upright inside quotation marks. Returning segments rather than one string
+    lets build_docx.py emit the italic run.
+    """
     c = REFS[key]["csl"]
     year = c["issued"]["date-parts"][0][0]
     who = _ieee_authors(c["author"])
@@ -341,27 +370,37 @@ def ieee_entry(key: str) -> str:
     if kind == "book":
         place = c.get("publisher-place")
         where = f"{place}: {c['publisher']}" if place else c["publisher"]
-        return f"{who}, {c['title']}. {where}, {year}."
+        return [(f"{who}, ", False), (c["title"], True),
+                (f". {where}, {year}.", False)]
 
     if kind == "report":
-        bits = [f"{who}, “{c['title']},”", c["publisher"]]
+        bits = [c["publisher"]]
+        if c.get("publisher-place"):
+            bits.append(c["publisher-place"])
         if c.get("number"):
             bits.append(f"Rep. {c['number']}")
-        bits.append(f"{year}.")
-        return " ".join(bits[:1]) + " " + ", ".join(bits[1:-1]) + f", {year}."
+        return [(f"{who}, “{_sentence_case(c['title'])},” "
+                 + ", ".join(bits) + f", {year}.", False)]
 
     journal = c.get("container-title", "")
     journal = _ABBREV.get(journal, journal)
-    bits = [f"{who}, “{c['title']},” {journal}"]
+    tail = []
     if c.get("volume"):
-        bits.append(f"vol. {c['volume']}")
+        tail.append(f"vol. {c['volume']}")
     if c.get("issue"):
-        bits.append(f"no. {c['issue']}")
+        tail.append(f"no. {c['issue']}")
     if c.get("page"):
         pages = c["page"].replace("-", "–")
-        bits.append(f"pp. {pages}" if "–" in pages else f"p. {pages}")
-    bits.append(f"{year}.")
-    return ", ".join(bits)
+        tail.append(f"pp. {pages}" if "–" in pages else f"p. {pages}")
+    tail.append(f"{year}.")
+    return [(f"{who}, “{_sentence_case(c['title'])},” ", False),
+            (journal, True),
+            (", " + ", ".join(tail), False)]
+
+
+def ieee_entry(key: str) -> str:
+    """The same entry as one plain string (used by the RIS/APA fallbacks)."""
+    return "".join(seg for seg, _ in ieee_entry_parts(key))
 
 
 def _ris_authors(rec) -> list[str]:

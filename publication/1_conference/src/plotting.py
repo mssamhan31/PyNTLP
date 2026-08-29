@@ -4,8 +4,14 @@ Fig1 - the problem: one timestamp across days, events mixed into the backbone
 Fig2 - positioning: practicality vs physical representativeness
 Fig3 - mechanism: how event frequency and event size reshape the across-day
        distribution, and where each rule cuts it
-Fig4 - recoverability map over the (p, kappa) grid
-Fig5 - headline evidence, plus the truncation noise floor
+Fig4 - recoverability map over the (p, kappa) grid (full width)
+Fig5 - accuracy against kappa and the truncation noise floor (single column)
+
+Fig5 is a COLUMN figure on purpose. A full-width figure becomes a one-column
+island between two continuous section breaks; Word balances the two-column run
+before each break, so an island that will not fit in what is left of the page
+moves on and strands the remainder. A column figure has no island and flows into
+exactly that space.
 
 Every figure is authored at its FINAL printed width (one IEEE column or the full
 page) so that Word never rescales it. That is why no savefig call passes
@@ -60,7 +66,7 @@ STYLE = {
     "estimated_aqf": dict(color=OKABE_VERMILLION, marker="o", ls="-",
                           label="AQF"),
     "oracle_aqf": dict(color=OKABE_GREEN, marker="D", ls=(0, (3, 1, 1, 1, 1, 1)),
-                       label="Upper bound"),
+                       label="Oracle-$q$"),
 }
 PLOT_ORDER = ["fixed_q_0.1", "fixed_q_0.2", "fixed_q_0.3", "estimated_aqf", "oracle_aqf"]
 
@@ -192,17 +198,20 @@ def fig2_positioning() -> None:
     ax.axvline(0.5, color="0.85", lw=0.8, zorder=0)
     ax.axhline(0.5, color="0.85", lw=0.8, zorder=0)
 
+    # The bottom-right label is right-aligned so it ends beside its own marker
+    # instead of drifting toward the middle, where it read as one block with the
+    # "Fixed quantile" label.
     points = [
-        ("Bottom-up\nappliance model", 0.16, 0.82, "#7B6BA8", (7, -14)),
-        ("Scalar shiftable\nfraction", 0.86, 0.16, OKABE_ORANGE, (-52, 8)),
-        ("Fixed\nquantile", 0.50, 0.50, OKABE_SKY, (7, -16)),
-        ("AQF\n(this paper)", 0.74, 0.74, OKABE_GREEN, (-34, 9)),
+        ("Bottom-up\nappliance model", 0.16, 0.82, "#7B6BA8", (7, -14), "left"),
+        ("Single shiftable\nfraction", 0.88, 0.20, OKABE_ORANGE, (-9, -4), "right"),
+        ("Fixed\nquantile", 0.52, 0.47, OKABE_SKY, (7, -16), "left"),
+        ("AQF\n(this paper)", 0.74, 0.74, OKABE_GREEN, (-34, 9), "left"),
     ]
-    for text, x, y, colour, off in points:
+    for text, x, y, colour, off, ha in points:
         ax.scatter([x], [y], s=42, color=colour, zorder=3, edgecolor="white",
                    linewidth=0.9)
         ax.annotate(text, (x, y), textcoords="offset points", xytext=off,
-                    fontsize=TICK_FS, color=TRUE_C, linespacing=1.25)
+                    fontsize=TICK_FS, color=TRUE_C, linespacing=1.25, ha=ha)
 
     ax.set_xlabel("Practical at scale  $\\rightarrow$")
     ax.set_ylabel("Physically representative  $\\rightarrow$")
@@ -370,95 +379,76 @@ def fig2_mechanism() -> None:
 # Fig 4 - recoverability map
 # =========================================================================
 def fig4_recoverability() -> None:
-    """R_F over the (p, kappa) grid for baseline, method, and oracle.
-
-    Plotted on log2(R_F) rather than R_F. R_F spans 0.43 to 35 across the grid,
-    so a linear scale clipped at 2 (the previous behaviour) collapsed the whole
-    low-persistence region into one flat saturated block, hiding the structure
-    that the noise-floor argument depends on.
-    """
+    """Recovery ratio over the (p, kappa) grid: fixed q, AQF, oracle-q."""
     gold = _load_gold()
     panels = [
-        (STRONGEST_FIXED_Q, "Strongest fixed quantile ($q=0.3$)"),
+        (STRONGEST_FIXED_Q, "Best fixed quantile ($q=0.3$)"),
         ("estimated_aqf", "AQF (this paper)"),
-        ("oracle_aqf", "Upper bound (true $p,\kappa$)"),
+        ("oracle_aqf", "Oracle-$q$ (knows true $p,\\kappa$)"),
     ]
-
-    pivots = {}
-    for variant, _ in panels:
-        sub = gold[gold["estimator_variant"] == variant]
-        pivots[variant] = sub.pivot(index="kappa", columns="p", values="r_f_mean").sort_index()
-
-    # R_F reaches 35 in the sparse-event corner. Letting vmax follow that would
-    # push the whole informative 0.5-8 range into near-white, so the red end is
-    # capped at 8 and the colourbar is drawn with an "over" arrow instead.
+    pivots = {v: gold[gold["estimator_variant"] == v]
+              .pivot(index="kappa", columns="p", values="r_f_mean").sort_index()
+              for v, _ in panels}
     all_vals = np.concatenate([np.log2(p.values).ravel() for p in pivots.values()])
+    # R_F reaches 35 in the sparse-event corner; capping the red end at 8 keeps
+    # the informative range visible instead of washing it out.
     norm = TwoSlopeNorm(vmin=float(all_vals.min()), vcenter=0.0, vmax=np.log2(8.0))
 
-    fig, axes = plt.subplots(1, 3, figsize=(config.FIG_FULL_W_IN, 1.86), sharey=True,
+    fig, axes = plt.subplots(1, 3, figsize=(config.FIG_FULL_W_IN, 1.62), sharey=True,
                              layout="constrained")
     mesh = None
-    for i, (ax, (variant, subtitle)) in enumerate(zip(axes, panels)):
+    for i, (ax, (variant, title)) in enumerate(zip(axes, panels)):
         piv = pivots[variant]
         vals = np.log2(piv.values)
         mesh = ax.pcolormesh(piv.columns, piv.index, vals, norm=norm, cmap="RdBu_r",
                              shading="auto", rasterized=True)
-        # R_F = 1 locus. Also the greyscale cue: a diverging map is dark at both
-        # ends by construction, so the contour is what tells over- from under-.
         ax.contour(piv.columns, piv.index, vals, levels=[0.0], colors=[TRUE_C],
                    linewidths=1.0)
         _mark_identifiable(ax, orientation="y", label=(i == 0))
-        ax.set_xlabel("Persistence $p$")
-        ax.set_title(subtitle, fontsize=TICK_FS, pad=3)
+        ax.set_xlabel("Event frequency $p$")
+        ax.set_title(title, fontsize=TICK_FS, pad=3)
         _panel(ax, "abc"[i])
-    axes[0].set_ylabel("Signal-to-variability  $\\kappa = A/\\sigma$")
+    axes[0].set_ylabel("$\\kappa = A/\\sigma$")
 
     ticks_rf = [0.5, 1, 2, 4, 8]
     cbar = fig.colorbar(mesh, ax=axes, fraction=0.030, pad=0.015, extend="max")
     cbar.set_ticks(np.log2(ticks_rf))
-    cbar.set_ticklabels([f"{t:g}" for t in ticks_rf])   # labelled in R_F, not log2
-    cbar.set_label("Recovery ratio  $R_F$", fontsize=LABEL_FS)
+    cbar.set_ticklabels([f"{t:g}" for t in ticks_rf])
+    cbar.set_label("$R_F$", fontsize=LABEL_FS)
     cbar.ax.tick_params(labelsize=TICK_FS)
     cbar.outline.set_linewidth(0.5)
     _save(fig, "fig4_recoverability_map.png")
 
 
-# =========================================================================
-# Fig 5 - headline evidence (new)
-# =========================================================================
-def fig5_headline_evidence() -> None:
-    """The three results the paper turns on, in one full-width strip.
+def fig5_curves() -> None:
+    """Accuracy against kappa, and the noise floor against p - one column.
 
-    (a) and (b) are the headline comparison against kappa; (c) carries the
-    noise-floor finding, which used to be its own figure. Folding it in keeps
-    all three results inside a four-page limit without dropping any of them.
+    Single column on purpose: this figure flows inside the text column instead
+    of forming a full-width island, so it fills space an island would strand.
     """
     gold = _load_gold()
     gold = gold.assign(abs_rf_dev=(gold["r_f_mean"] - 1.0).abs())
 
-    fig, axes = plt.subplots(1, 3, figsize=(config.FIG_FULL_W_IN, 1.80),
+    fig, axes = plt.subplots(3, 1, figsize=(config.FIG_COL_W_IN, 3.55),
                              layout="constrained")
 
-    specs = [
-        (axes[0], "abs_rf_dev", "median", "Median  $|R_F - 1|$"),
-        (axes[1], "mae_b_mean", "mean", "Mean  $MAE_B$  (" + UNIT + ")"),
-    ]
-    for i, (ax, value_col, how, ylabel) in enumerate(specs):
+    for i, (ax, col, how, ylab) in enumerate([
+            (axes[0], "abs_rf_dev", "median", "Median $|R_F-1|$"),
+            (axes[1], "mae_b_mean", "mean", "Mean $MAE_B$ (" + UNIT + ")")]):
         agg = gold.pivot_table(index="kappa", columns="estimator_variant",
-                               values=value_col, aggfunc=how)
+                               values=col, aggfunc=how)
         for variant in PLOT_ORDER:
             st = STYLE[variant]
             ax.plot(agg.index, agg[variant], color=st["color"], marker=st["marker"],
                     ls=st["ls"], label=st["label"])
         _mark_identifiable(ax, orientation="x", label=(i == 0))
         ax.set_yscale("log")
-        ax.set_xlabel("$\kappa = A/\sigma$")
-        ax.set_ylabel(ylabel + "  (log)")
+        ax.set_ylabel(ylab)
         ax.set_xlim(config.KAPPA_GRID.min() - 0.2, config.KAPPA_GRID.max() + 0.2)
-        ax.margins(y=0.18)
+        ax.margins(y=0.20)
         _panel(ax, "ab"[i])
+    axes[1].set_xlabel("$\\kappa = A/\\sigma$")
 
-    # (c) the truncation noise floor, at a kappa the diagnostic would trust.
     ax = axes[2]
     kappa_fixed = 3.0
     for variant in [STRONGEST_FIXED_Q, "estimated_aqf", "oracle_aqf"]:
@@ -466,23 +456,25 @@ def fig5_headline_evidence() -> None:
                    & (np.isclose(gold["kappa"], kappa_fixed))].sort_values("p")
         st = STYLE[variant]
         ax.plot(sub["p"], sub["r_f_mean"], color=st["color"], marker=st["marker"],
-                ls=st["ls"], label=st["label"])
+                ls=st["ls"])
     p_dense = np.linspace(config.P_GRID.min(), config.P_GRID.max(), 200)
-    predicted = 1.0 + (1.0 - p_dense) * config.NOISE_FLOOR_PER_DAY / (p_dense * kappa_fixed)
-    ax.plot(p_dense, predicted, color=NOISE_FLOOR_C, ls=(0, (1, 1)), lw=1.3, marker="",
-            label="Noise floor (predicted)")
+    ax.plot(p_dense,
+            1.0 + (1.0 - p_dense) * config.NOISE_FLOOR_PER_DAY / (p_dense * kappa_fixed),
+            color=NOISE_FLOOR_C, ls=(0, (1, 1)), lw=1.3, marker="",
+            label="Noise floor")
     ax.axhline(1.0, color=TRUE_C, lw=0.7, zorder=1)
     ax.set_yscale("log")
-    ax.set_xlabel("Persistence $p$")
-    ax.set_ylabel("$R_F$  (log)")
+    ax.set_xlabel("Event frequency $p$")
+    ax.set_ylabel("$R_F$")
     ax.margins(y=0.18)
-    _tag(ax, f"$\kappa={kappa_fixed:g}$")
+    # Tag sits left of centre: the legend occupies the upper right of this panel.
+    _tag(ax, f"$\\kappa={kappa_fixed:g}$", x=0.22)
     _panel(ax, "c")
-    ax.legend(loc="upper right", fontsize=LEGEND_FS - 0.5, bbox_to_anchor=(1.0, 0.90))
+    ax.legend(loc="upper right", fontsize=LEGEND_FS - 0.5)
 
     handles, labels = axes[0].get_legend_handles_labels()
-    fig.legend(handles, labels, loc="outside upper center", ncol=5, fontsize=LEGEND_FS)
-    _save(fig, "fig5_headline_evidence.png")
+    fig.legend(handles, labels, loc="outside upper center", ncol=3, fontsize=LEGEND_FS - 0.5)
+    _save(fig, "fig5_curves.png")
 
 
 # =========================================================================
@@ -491,7 +483,7 @@ FIGURES = [
     ("fig2_positioning.png", config.FIG_COL_W_IN, fig2_positioning),
     ("fig3_mechanism.png", config.FIG_FULL_W_IN, fig3_mechanism),
     ("fig4_recoverability_map.png", config.FIG_FULL_W_IN, fig4_recoverability),
-    ("fig5_headline_evidence.png", config.FIG_FULL_W_IN, fig5_headline_evidence),
+    ("fig5_curves.png", config.FIG_COL_W_IN, fig5_curves),
 ]
 
 

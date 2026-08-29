@@ -65,10 +65,16 @@ def fallback_blend(q_star: float, q_default: float, d_hat: float, d_thresh: floa
 
     Returns (q_final, weight) where weight=1 means "fully trust q_star" and
     weight=0 means "not identifiable, use the default".
+
+    The result is clipped at the median. For the AQF functional form the clip
+    can never bind - q_star = (1-p)/2 + p*Phi(-kappa) <= 0.5 for any p in [0,1]
+    and kappa >= 0, and blending with a default below 0.5 keeps it there - so
+    existing results are bit-identical. It exists as a hard guard for any future
+    q_star variant whose value is not bounded by construction.
     """
     weight = float(np.clip(d_hat / d_thresh, 0.0, 1.0))
     q_final = weight * q_star + (1.0 - weight) * q_default
-    return q_final, weight
+    return min(q_final, 0.5), weight
 
 
 def residual_estimator(load: np.ndarray, backbone_hat: float) -> np.ndarray:

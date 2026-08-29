@@ -54,6 +54,25 @@ data-calibrated estimate. That port has not been done and is out of scope for th
   build_docx.py, so add the key there when adding an item.
 - Citations are grouped numeric ([9, 10], [9-11]) and the document's Zotero style is set to
   Vancouver to match, so refreshing fields in Zotero does not revert the grouping.
+- Reference-list titles are normalised to IEEE sentence case at RENDER time
+  (`_sentence_case` in references.py); the CSL/RIS data keeps publisher casing, so
+  Zotero imports stay faithful. Protected proper nouns live in `_PROTECTED`.
+- Sentence dashes in the manuscript are spaced en dashes (" – "); build_docx.py
+  content strings use them directly. Never use a spaced hyphen as a dash.
+- `picture()` sets keep-with-next on the image paragraph so a figure can never be
+  separated from its caption by a page break. Layout consequence: a full-width island
+  moves as one block, so the text that fills the previous page's tail must be placed
+  BEFORE the island in document order (the "Fig. 4 shows where..." paragraph is
+  deliberately before the fig4 island for this reason).
+- Terminology is unified as: "event frequency p" (never persistence), "event size kappa",
+  "backbone", "candidate flexibility", "oracle-q". Oracle-q is deliberately NOT called an
+  upper bound or ceiling - it takes an empirical quantile of D days, so AQF beats it on
+  backbone error wherever kappa >= 4 (32 of 100 cells). The paper states this.
+- The intro carries the production MVP equation E_shift = s*k*a*E_day (equation key "mvp",
+  omml index 8) and the conclusion ties back to replacing s. Keep the two in sync.
+- fallback_blend in estimators.py clips the blended quantile at 0.5. Provably a no-op for
+  the current q* form (empirical max q_used = 0.4875 over all 10,000 runs), so results are
+  unchanged; it backs the paper's "capped at the median" claim.
 
 ## Regenerating everything
 

@@ -28,7 +28,7 @@ DAYS = 365  # sample size D at the fixed timestamp
 DT_HOURS = 0.5  # interval length, for energy accounting consistency with PyNTLP
 
 # --- Recoverability grid -------------------------------------------------
-P_GRID = np.round(np.linspace(0.05, 0.95, 10), 3)  # persistence
+P_GRID = np.round(np.linspace(0.05, 0.95, 10), 3)  # event frequency (a.k.a. persistence)
 KAPPA_GRID = np.round(np.linspace(0.5, 5.0, 10), 3)  # signal-to-variability ratio A/sigma
 
 N_REPLICATES = 20
