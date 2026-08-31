@@ -53,9 +53,9 @@ P_ROBUST = 0.3  # secondary restriction: events frequent enough to be estimable
 NOISE_FLOOR_PER_DAY = float(1.0 / np.sqrt(2.0 * np.pi))  # 0.3989 sigma
 
 # --- Figure geometry (IEEE two-column) ------------------------------------
-# Figures are authored at their FINAL printed width so Word never rescales them
-# and in-figure type keeps the point size set here. build_docx derives its
-# Inches() widths from these values.
+# Final printed widths for an IEEE two-column page. Figures are authored at these
+# sizes so nothing has to rescale them on insert and in-figure type keeps the
+# point size set here.
 FIG_COL_W_IN = 3.30  # one IEEE column
 FIG_FULL_W_IN = 7.00  # both columns (a "figure*" island)
 FIG_DPI = 600

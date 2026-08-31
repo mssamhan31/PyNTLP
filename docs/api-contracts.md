@@ -181,11 +181,11 @@ Expected columns are:
 
 - `lga_segment`
 - `n_total`
-- `n_eligible_total`
+- `n_eligible`
+- `eligibility_rate`
 - `n_eligible_no_der`
 - `n_eligible_solar`
 - `n_eligible_solar_battery`
-- `eligibility_rate_total`
 - `eligibility_rate_no_der`
 - `eligibility_rate_solar`
 - `eligibility_rate_solar_battery`

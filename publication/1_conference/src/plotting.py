@@ -14,11 +14,12 @@ moves on and strands the remainder. A column figure has no island and flows into
 exactly that space.
 
 Every figure is authored at its FINAL printed width (one IEEE column or the full
-page) so that Word never rescales it. That is why no savefig call passes
-bbox_inches="tight": tight bounding boxes crop the canvas to its content, which
-would make the saved file narrower than the width build_docx.py inserts it at,
-and Word would scale it back up - silently changing every type size in the
-figure. Constrained layout does the same job without touching the canvas size.
+page, per config.FIG_COL_W_IN / FIG_FULL_W_IN) so that whatever inserts it never
+has to rescale it. That is why no savefig call passes bbox_inches="tight": tight
+bounding boxes crop the canvas to its content, so the saved file comes out
+narrower than the width it is placed at and gets scaled back up - silently
+changing every type size in the figure. Constrained layout does the same job
+without touching the canvas size.
 """
 
 from __future__ import annotations

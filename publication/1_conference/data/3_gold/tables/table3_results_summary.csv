@@ -1,6 +1,0 @@
-estimator,Mean R_F,Mean |R_F − 1|
-Oracle-AQF,1.83,0.83
-Estimated-AQF,2.48,1.54
-Fixed q=0.3,2.2,1.55
-Fixed q=0.2,2.87,2.08
-Fixed q=0.1,3.92,3.0
