@@ -13,6 +13,16 @@ type: software
 version: 0.2.0
 license: MIT
 repository-code: "https://github.com/mssamhan31/PyNTLP"
+# Concept DOI: always resolves to the most recent release. Version-specific DOIs
+# are listed under identifiers, and Zenodo mints a new one on every release.
+doi: 10.5281/zenodo.22246959
+identifiers:
+  - type: doi
+    value: 10.5281/zenodo.22246959
+    description: Concept DOI for all versions of PyNTLP.
+  - type: doi
+    value: 10.5281/zenodo.22246960
+    description: Version DOI for PyNTLP v0.2.0.
 authors:
   - family-names: Samhan
     given-names: "M. Syahman"
