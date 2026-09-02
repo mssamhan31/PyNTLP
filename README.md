@@ -1,5 +1,8 @@
 # PyNTLP
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.22246959.svg)](https://doi.org/10.5281/zenodo.22246959)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 ## Executive Summary
 
 `PyNTLP` stands for **Python for Network Tariff to Load Profile**.
@@ -183,6 +186,26 @@ For more detail, start with the [docs index](docs/README.md), or go directly to:
 - [Troubleshooting](docs/troubleshooting.md)
 - [Development notes](docs/development.md)
 - [Repository structure](docs/repo-structure.md)
+
+## How To Cite
+
+Releases are archived on Zenodo. If you use PyNTLP or the AQF results, please
+cite it.
+
+To cite **the project in general**, use the concept DOI, which always resolves
+to the most recent release:
+
+> [10.5281/zenodo.22246959](https://doi.org/10.5281/zenodo.22246959)
+
+To cite **a specific version**, use that release's own DOI, so the reference
+resolves to exactly the code that produced the results. For v0.2.0:
+
+> M. S. Samhan, A. Bruce, and B. Yildiz, "PyNTLP: Adaptive Quantile Flexibility
+> (AQF) — code and artifacts," v0.2.0, Zenodo, 2026.
+> doi: [10.5281/zenodo.22246960](https://doi.org/10.5281/zenodo.22246960).
+
+Machine-readable metadata is in [`CITATION.cff`](CITATION.cff); GitHub's "Cite
+this repository" button reads it directly.
 
 ## References
 
