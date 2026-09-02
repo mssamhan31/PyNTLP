@@ -1,0 +1,36 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it using the metadata below."
+title: "PyNTLP: Adaptive Quantile Flexibility (AQF) — code and artifacts"
+abstract: >-
+  PyNTLP (Python for Network Tariff to Load Profile) estimates how electricity
+  network tariff designs could change customer load profiles. It contains the
+  Spark-native pyntlp package implementing the Solar Sharer Offer
+  tariff-to-load-profile model, and standalone research code for Adaptive
+  Quantile Flexibility (AQF), a method for estimating the flexible component of
+  aggregate metered demand by computing the bias-minimising quantile from the
+  estimated frequency and size of flexible events rather than hand-picking it.
+type: software
+version: 0.2.0
+license: MIT
+repository-code: "https://github.com/mssamhan31/PyNTLP"
+authors:
+  - family-names: Samhan
+    given-names: "M. Syahman"
+    affiliation: "Collaboration on Energy and Environmental Markets (CEEM), UNSW Sydney"
+    orcid: "https://orcid.org/0009-0007-6149-9422"
+    email: m.samhan@unsw.edu.au
+  - family-names: Bruce
+    given-names: Anna
+    affiliation: "Collaboration on Energy and Environmental Markets (CEEM), UNSW Sydney"
+  - family-names: Yildiz
+    given-names: Baran
+    affiliation: "Collaboration on Energy and Environmental Markets (CEEM), UNSW Sydney"
+keywords:
+  - demand flexibility
+  - load profile modelling
+  - network tariff design
+  - quantile estimation
+  - net load forecasting
+  - distribution network planning
+  - Gaussian mixture model
+  - electricity demand

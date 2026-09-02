@@ -20,6 +20,9 @@ API instead of embedding package logic.
 - `docs/`: deeper repository and implementation documentation.
 - `src/`: installable Python package source.
 - `tests/`: unit and integration-style tests.
+- `publication/`: standalone research code and artifacts for papers. Not imported
+  by the package and not covered by the package test suite; each subfolder has
+  its own README and dependencies.
 
 ## Documentation
 

@@ -107,11 +107,11 @@ def _cell_pivots(gold: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, pd.Dat
 def build_headline_tables(gold: pd.DataFrame | None = None) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Write the two tables the Results section actually argues from.
 
-    table3_results_summary.csv ranks estimators by the MEAN of |R_F - 1|, which
-    is dominated by the low-persistence cells where the truncation noise floor -
-    not the estimator - inflates R_F. These tables report the median and the
-    identifiable-region restriction alongside that mean, plus MAE_B, which the
-    noise floor does not contaminate at all.
+    table3_headline_results.csv ranks estimators by the MEAN of |R_F - 1|, which
+    is dominated by the low event-frequency cells where the truncation noise
+    floor - not the estimator - inflates R_F. These tables report the median and
+    the identifiable-region restriction alongside that mean, plus MAE_B, which
+    the noise floor does not contaminate at all.
     """
     if gold is None:
         gold = pd.read_csv(config.GOLD_TABLES_DIR / "recoverability_summary.csv")

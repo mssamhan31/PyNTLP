@@ -29,6 +29,7 @@ import numpy as np
 import pandas as pd
 from matplotlib.colors import TwoSlopeNorm
 from matplotlib.patches import FancyArrowPatch, FancyBboxPatch
+from matplotlib.ticker import NullFormatter
 
 import config
 import estimators
@@ -271,112 +272,6 @@ def fig3_mechanism() -> None:
 
 
 # =========================================================================
-# Fig 2 - workflow
-# =========================================================================
-def _RETIRED_fig_workflow() -> None:
-    """Four-stage pipeline, laid out 2x2 so it fits one IEEE column.
-
-    A single horizontal chain would leave each box about 0.7" wide at column
-    width, which is too narrow for the stage labels.
-    """
-    stages = [
-        ("1. Synthetic\ngeneration", "$L = B + ZA + \\epsilon$", OKABE_SKY),
-        ("2. Backbone\nestimation", "fixed-$q$  /  AQF $q_t^*$", OKABE_GREEN),
-        ("3. Residual\nscoring", "$\\widehat F = \\max(L-\\widehat B,0)$", OKABE_ORANGE),
-        ("4. Recoverability\naggregation", "$R_F$,  $MAE_B$", OKABE_VERMILLION),
-    ]
-    # serpentine layout: (0,0) -> (0,1) -> down -> (1,1) -> (1,0)
-    cells = [(0, 1), (1, 1), (1, 0), (0, 0)]
-
-    fig, ax = plt.subplots(figsize=(config.FIG_COL_W_IN, 2.05), layout="constrained")
-    box_w, box_h = 0.42, 0.40
-    for (title, sub, color), (col, row) in zip(stages, cells):
-        x0, y0 = col * 0.54, row * 0.52
-        ax.add_patch(FancyBboxPatch(
-            (x0, y0), box_w, box_h, boxstyle="round,pad=0.006,rounding_size=0.03",
-            facecolor=color, alpha=0.16, edgecolor=color, linewidth=1.0,
-        ))
-        ax.text(x0 + box_w / 2, y0 + box_h * 0.66, title, ha="center", va="center",
-                fontsize=TICK_FS, weight="bold", linespacing=1.25)
-        ax.text(x0 + box_w / 2, y0 + box_h * 0.21, sub, ha="center", va="center",
-                fontsize=TICK_FS - 0.5)
-
-    arrows = [
-        ((0.435, 0.72), (0.525, 0.72)),   # 1 -> 2, across the top
-        ((0.75, 0.505), (0.75, 0.415)),   # 2 -> 3, down the right
-        ((0.525, 0.20), (0.435, 0.20)),   # 3 -> 4, back across the bottom
-    ]
-    for start, end in arrows:
-        ax.add_patch(FancyArrowPatch(start, end, arrowstyle="-|>", mutation_scale=8,
-                                     color="dimgrey", linewidth=1.0))
-
-    ax.set_xlim(-0.02, 0.98)
-    ax.set_ylim(-0.02, 0.94)
-    ax.axis("off")
-    _save(fig, "fig2_workflow.png")
-
-
-# =========================================================================
-# Fig 3 - estimator mechanism (merges the old fig5 + fig6)
-# =========================================================================
-def fig2_mechanism() -> None:
-    """How p and kappa reshape the load histogram, and where each rule cuts it.
-
-    Three panels rather than a 2x3 factorial: (a)->(b) isolates the effect of
-    kappa at fixed p, and (b)->(c) the effect of p at fixed kappa. That carries
-    both comparisons while leaving each panel wide enough to read in print.
-
-    Drawn from a large sample (not D=365) so the panels show where the quantile
-    rules sit asymptotically rather than one draw's sampling noise.
-    """
-    n_show = 4000
-    q_baseline = float(STRONGEST_FIXED_Q.rsplit("_", 1)[1])
-    specs = [(0.3, 1.0), (0.3, 3.0), (0.6, 3.0)]
-
-    fig, axes = plt.subplots(1, 3, figsize=(config.FIG_FULL_W_IN, 1.95),
-                             layout="constrained")
-
-    drawn = []
-    for p, kappa in specs:
-        df = synth.generate_days(p, kappa, config.SIGMA, config.BACKBONE_B,
-                                 n_show, seed=7)
-        drawn.append((p, kappa, df["l"].to_numpy()))
-    # A single x-range across all three, so the comparison can be made by eye.
-    lo = min(v.min() for _, _, v in drawn)
-    hi = max(v.max() for _, _, v in drawn)
-    bins = np.linspace(lo, hi, 70)
-
-    for c, (ax, (p, kappa, load)) in enumerate(zip(axes, drawn)):
-        ax.hist(load, bins=bins, color="0.82", edgecolor="white", linewidth=0.2,
-                density=True)
-        b_fixed = estimators.fixed_quantile_backbone(load, q_baseline)
-        q_star = estimators.aqf_quantile(p, kappa)
-        b_aqf = estimators.fixed_quantile_backbone(load, q_star)
-
-        # Widths are staggered widest-to-narrowest deliberately: the three cuts
-        # nearly coincide in some panels, and equal widths would hide all but
-        # the topmost.
-        ax.axvline(config.BACKBONE_B, color=TRUE_C, lw=2.2,
-                   label="True backbone $B$")
-        ax.axvline(b_fixed, color=STYLE[STRONGEST_FIXED_Q]["color"],
-                   ls=(0, (4, 1.5)), lw=1.4,
-                   label=STYLE[STRONGEST_FIXED_Q]["label"])
-        ax.axvline(b_aqf, color=OKABE_VERMILLION, ls="-", lw=0.9,
-                   label="AQF $q^*$")
-
-        ax.set_xlim(lo, hi)
-        ax.set_yticks([])
-        _panel(ax, "abc"[c])
-        _tag(ax, f"$p={p:g}$,  $\\kappa={kappa:g}$")
-        ax.set_xlabel(f"Load ({UNIT})")
-    axes[0].set_ylabel("Density")
-
-    handles, labels = axes[0].get_legend_handles_labels()
-    fig.legend(handles, labels, loc="outside upper center", ncol=3, fontsize=LEGEND_FS)
-    _save(fig, "fig2_mechanism.png")
-
-
-# =========================================================================
 # Fig 4 - recoverability map
 # =========================================================================
 def fig4_recoverability() -> None:
@@ -465,6 +360,11 @@ def fig5_curves() -> None:
             label="Noise floor")
     ax.axhline(1.0, color=TRUE_C, lw=0.7, zorder=1)
     ax.set_yscale("log")
+    # This panel spans well under one decade, so matplotlib decides for itself
+    # whether to label the minor ticks - and the heuristic differs by version,
+    # which crowds the axis with overlapping "2x10^0"-style labels. Suppress them
+    # explicitly so the panel renders identically whatever matplotlib is installed.
+    ax.yaxis.set_minor_formatter(NullFormatter())
     ax.set_xlabel("Event frequency $p$")
     ax.set_ylabel("$R_F$")
     ax.margins(y=0.18)

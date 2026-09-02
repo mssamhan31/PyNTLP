@@ -116,7 +116,8 @@ tables and reproducible numbers — nothing else.
 
 ### Claims that are easy to get wrong
 
-- `estimators.ashman_d` returns `kappa/sqrt(2)`, which is Ashman's D **rescaled by 1/sqrt(2)**:
+- `estimators.identifiability_diagnostic` returns `kappa/sqrt(2)`, which is Ashman's D
+  **rescaled by 1/sqrt(2)**:
   for a tied-variance mixture Ashman's own statistic evaluates to kappa itself, so gating at
   D >= 2 here is the stricter bar kappa >= 2.83, not Ashman's kappa > 2. The paper therefore
   says "a bimodality bar in the spirit of Ashman's D" and does not claim the statistic IS

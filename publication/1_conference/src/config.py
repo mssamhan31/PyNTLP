@@ -28,7 +28,7 @@ DAYS = 365  # sample size D at the fixed timestamp
 DT_HOURS = 0.5  # interval length, for energy accounting consistency with PyNTLP
 
 # --- Recoverability grid -------------------------------------------------
-P_GRID = np.round(np.linspace(0.05, 0.95, 10), 3)  # event frequency (a.k.a. persistence)
+P_GRID = np.round(np.linspace(0.05, 0.95, 10), 3)  # event frequency
 KAPPA_GRID = np.round(np.linspace(0.5, 5.0, 10), 3)  # signal-to-variability ratio A/sigma
 
 N_REPLICATES = 20
@@ -37,7 +37,7 @@ BASE_SEED = 42
 # --- Estimators -----------------------------------------------------------
 FIXED_QS = [0.1, 0.2, 0.3]
 Q_DEFAULT = 0.2  # fallback quantile when the mixture is not identifiable
-D_THRESH = 2.0  # separation bar for D = kappa/sqrt(2) (see estimators.ashman_d)
+D_THRESH = 2.0  # separation bar for D = kappa/sqrt(2) (see estimators.identifiability_diagnostic)
 
 ESTIMATOR_VARIANTS = [f"fixed_q_{q}" for q in FIXED_QS] + ["oracle_aqf", "estimated_aqf"]
 
