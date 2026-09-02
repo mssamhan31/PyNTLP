@@ -1,0 +1,5 @@
+opponent,available_in_advance,cells_won,cells_total,win_rate
+Fixed q=0.1,Yes,95,100,0.95
+Fixed q=0.2,Yes,89,100,0.89
+Fixed q=0.3,Yes,58,100,0.58
+"Best fixed q, per-cell hindsight",No,44,100,0.44

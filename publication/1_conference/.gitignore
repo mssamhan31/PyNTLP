@@ -1,0 +1,7 @@
+# Regenerable raw synthetic data (large; produced by experiment.py)
+data/1_bronze/
+
+# Python
+__pycache__/
+*.pyc
+.ipynb_checkpoints/

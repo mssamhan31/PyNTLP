@@ -1,0 +1,33 @@
+{
+  "title": "PyNTLP: Adaptive Quantile Flexibility (AQF) — code and artifacts",
+  "description": "<p>PyNTLP (Python for Network Tariff to Load Profile) estimates how electricity network tariff designs could change customer load profiles. The repository contains two independent codebases.</p><p><strong>The <code>pyntlp</code> package</strong> is a Spark-native library of pure transformations implementing the Solar Sharer Offer tariff-to-load-profile model: parameter validation, segment-level eligibility metrics, energy-neutral interval deltas, and output validation.</p><p><strong>Adaptive Quantile Flexibility (AQF)</strong> is standalone research code and artifacts supporting a conference paper. It addresses the first stage of the broader problem: before you can say how a tariff moves load, you must estimate how much of the observed load was flexible at all, given that metered demand shows only a total. AQF selects the bias-minimising quantile for separating flexible load from the underlying backbone, computed from the estimated frequency and size of flexible events rather than hand-picked, with an identifiability check and a fallback when the two modes are too poorly separated to trust. The study is synthetic-only, over a grid of event frequency and event size, and includes the full experiment pipeline, the aggregated result tables, and the paper's figures. All seeds are fixed, so the committed artifacts are reproducible from the pinned dependencies.</p>",
+  "upload_type": "software",
+  "license": "mit",
+  "access_right": "open",
+  "creators": [
+    {
+      "name": "Samhan, M. Syahman",
+      "affiliation": "Collaboration on Energy and Environmental Markets (CEEM), UNSW Sydney",
+      "orcid": "0009-0007-6149-9422"
+    },
+    {
+      "name": "Bruce, Anna",
+      "affiliation": "Collaboration on Energy and Environmental Markets (CEEM), UNSW Sydney"
+    },
+    {
+      "name": "Yildiz, Baran",
+      "affiliation": "Collaboration on Energy and Environmental Markets (CEEM), UNSW Sydney"
+    }
+  ],
+  "keywords": [
+    "demand flexibility",
+    "load profile modelling",
+    "network tariff design",
+    "quantile estimation",
+    "net load forecasting",
+    "distribution network planning",
+    "Gaussian mixture model",
+    "electricity demand"
+  ],
+  "language": "eng"
+}

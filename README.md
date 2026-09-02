@@ -19,6 +19,32 @@ Contributor:
 - M. Syahman Samhan
 - m.samhan@unsw.edu.au
 
+## Where This Project Is Up To
+
+PyNTLP today implements one tariff, the Solar Sharer Offer, and it carries
+substantial limitations that are set out in
+[Assumptions and limitations](docs/assumptions-and-limitations.md). It should be
+read as a first working example rather than a finished general tool.
+
+The longer-term goal is for PyNTLP to model **any** tariff structure, not only
+SSO. Getting there breaks into stages, and the first is the hardest: before you
+can say how a tariff moves load, you have to know how much of the observed load
+was ever flexible in the first place. Metered demand shows only a total, with
+the flexible part already mixed into it.
+
+**Stage one is Adaptive Quantile Flexibility (AQF)**, a method for estimating
+that flexible component from aggregate data. The idea is that the quantile you
+should use to separate flexible load from the underlying level is not a
+hand-picked constant but a quantity you can compute, from how often flexible
+events happen and how large they are. A conference paper describes this stage.
+
+The code, data and figures behind that paper are in
+[publication/1_conference/](publication/1_conference/) — see
+[its README](publication/1_conference/README.md) for the model and how to
+reproduce every result. It is standalone research code and is not imported by
+the `pyntlp` package; if AQF proves out, its estimator logic will be ported into
+the package as a separate, later effort.
+
 ## What Is The Solar Sharer Offer?
 
 The Solar Sharer Offer is a network tariff concept that encourages eligible

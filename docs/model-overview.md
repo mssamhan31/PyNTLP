@@ -51,11 +51,11 @@ output, and grain.
 The function returns one row per `lga_segment`. Each row contains:
 
 - `n_total`: distinct NMI count
-- `n_eligible_total`: eligible NMI count
+- `n_eligible`: eligible NMI count
+- `eligibility_rate`: eligible share of `n_total`
 - `n_eligible_no_der`: eligible NMI count for `No_DER`
 - `n_eligible_solar`: eligible NMI count for `Solar`
 - `n_eligible_solar_battery`: eligible NMI count for `Solar_Battery`
-- `eligibility_rate_total`
 - `eligibility_rate_no_der`
 - `eligibility_rate_solar`
 - `eligibility_rate_solar_battery`
