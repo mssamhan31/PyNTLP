@@ -176,7 +176,7 @@ PyNTLP may be useful for:
 
 ## Documentation
 
-For more detail, start with the [docs index](docs/README.md), or go directly to:
+For more detail, start with the [docs overview](docs/overview.md), or go directly to:
 
 - [Glossary](docs/glossary.md)
 - [Assumptions and limitations](docs/assumptions-and-limitations.md)

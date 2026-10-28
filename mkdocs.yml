@@ -1,0 +1,45 @@
+site_name: PyNTLP
+site_description: "Python for Network: Tariff to Load Profile (PyNTLP), open-source software that turns a tariff into a change to a load forecast"
+site_url: https://mssamhan31.github.io/PyNTLP/
+repo_url: https://github.com/mssamhan31/PyNTLP
+repo_name: mssamhan31/PyNTLP
+docs_dir: docs
+theme:
+  name: material
+  # The PhD deck palette (navy, orange) is set in docs/assets/css/site.css; Arial everywhere.
+  palette:
+    primary: custom
+    accent: custom
+  font: false
+  features:
+    - navigation.tabs        # two tabs: Home for a general reader, Documentation for everything technical
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+extra_css:
+  - assets/css/site.css
+markdown_extensions:
+  - tables
+  - attr_list
+  - md_in_html
+  - toc:
+      permalink: true
+  - pymdownx.superfences
+  - pymdownx.blocks.details   # the one collapsed "Show details" block at the foot of each page
+# The menu holds what an analyst running the package needs; every other page is built and
+# searchable, reached from the Overview's full page list and from links in the text.
+nav:
+  - Home: index.md
+  - Documentation:
+      - Overview: overview.md
+      - Usage guide: usage-guide.md
+      - Model overview: model-overview.md
+      - API contracts: api-contracts.md
+      - Troubleshooting: troubleshooting.md
+      - Papers: papers.md
+not_in_nav: |
+  /assumptions-and-limitations.md
+  /glossary.md
+  /repo-structure.md
+  /development.md
+  /aqf.md

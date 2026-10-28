@@ -7,3 +7,5 @@ dist/
 *.egg-info/
 databricks/
 planning/
+# mkdocs build output (the site is published by docs-pages.yml, not committed)
+site/
