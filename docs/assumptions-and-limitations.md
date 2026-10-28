@@ -1,31 +1,35 @@
-# Assumptions And Limitations
+# Assumptions and limitations
 
-## Executive Summary
+The current `pyntlp` model is a first public Solar Sharer Offer model: small, explicit and
+testable. It is not yet a general tariff simulation engine. Its output is only as reliable as the
+assumptions and input data it is given.
 
-This page documents what the current `pyntlp` implementation assumes, what it
-does not yet model, and what should be treated carefully when interpreting
-results.
+## What the model assumes
 
-The current implementation is a first public SSO model. It is intentionally
-small, explicit, and testable. It is not yet a general tariff simulation engine,
-although the project goal is to support broader network tariff structures over
-time.
+- **Behaviour is set by parameters, not estimated.** Eligible customer patterns, smart-meter
+  eligibility, uptake by DER group, the shiftable share of daily energy by segment, a response
+  multiplier, a forecast-year adoption ramp and a daily cap per participant are all inputs.
+- **Energy is neutral.** What the free window gains, the donor intervals lose; there is no net new
+  daily energy.
+- **Allocation is flat.** Shifted energy is spread evenly across the free window and removed evenly
+  from the donor intervals.
+- **Eligibility is at `lga_segment` grain**, not per customer.
+- **The participant cap applies once per `lga_segment` population**, not per network object.
+- **Missing metrics mean zero shift**, so uncovered segments keep their rows with zero deltas.
 
-## Current Tariff Coverage
+/// details | Show details
+    type: more
 
-The implemented model covers the Solar Sharer Offer workflow.
+## Current tariff coverage
 
-The package name is broader than SSO because the intended direction is to
-support other tariff structures in future versions. Those future structures may
-need different eligibility rules, allocation methods, validation checks, and
-output contracts.
+The implemented model covers the Solar Sharer Offer workflow. The package name is broader because
+the intended direction is to support other tariff structures in later versions, which may need
+different eligibility rules, allocation methods, validation checks and output contracts.
 
-## Behavioural Assumptions
+## Behavioural assumptions
 
-The SSO model uses explicit assumptions rather than estimating customer
-behaviour from first principles.
-
-Important behavioural inputs include:
+The model uses explicit assumptions rather than estimating customer behaviour from first
+principles. The behavioural inputs are:
 
 - eligible customer patterns
 - smart-meter eligibility
@@ -35,75 +39,48 @@ Important behavioural inputs include:
 - forecast-year adoption ramp
 - daily participant cap
 
-The model output is only as reliable as those assumptions and the input data
-used with them.
+## Energy accounting
 
-## Energy Accounting
+The engine supports energy-neutral shifting only. Energy added to the free window is removed from
+the donor intervals. The model does not represent net new daily energy use from rebound, comfort
+takeback or additional appliance use. Rebound-related configuration keys are accepted for contract
+stability but are not used by the calculation.
 
-The current engine supports energy-neutral shifting.
+## Window shape
 
-This means energy added to the SSO policy window is removed from donor
-intervals. The model does not currently represent net new daily energy use from
-rebound, comfort takeback, or additional appliance usage.
+The model supports flat allocation only, `window_shape: flat` and `donor_shape: flat`. It does not
+yet model:
 
-Optional rebound-related configuration keys are accepted for public contract
-stability, but they are not used by the v0.1 calculation.
-
-## Window Shape
-
-The current model supports flat allocation only:
-
-- `window_shape: flat`
-- `donor_shape: flat`
-
-Flat allocation means the model spreads shifted energy evenly across receiving
-intervals and removes energy evenly from donor intervals.
-
-It does not yet model:
-
-- shaped uptake within the SSO window
+- shaped uptake within the free window
 - customer-specific response curves
 - weather-sensitive shifting
-- different weekday/weekend response shapes
-- rebound after the policy window
+- different weekday and weekend response shapes
+- rebound after the free window
 
-## Eligibility Grain
+## Eligibility grain
 
-Eligibility is calculated at `lga_segment` grain.
+Eligibility is calculated at `lga_segment` grain. This keeps the public model compact, but it also
+means the package does not model individual customer behaviour: NMI-level data is summarised into
+eligibility, and the model applies those summaries to baseline profile groups.
 
-This keeps the public model compact, but it also means the package does not
-model individual-customer behaviour. NMI-level data is used to summarise
-eligibility, then the model applies those summaries to baseline profile groups.
+## Participant cap grain
 
-## Participant Cap Grain
+Participant caps are applied once per `lga_segment` population and model scenario, excluding
+`fc_object_id`, so the same population is not counted again because it appears under several
+network objects. The capped amount is allocated back to each `fc_object_id` by its share of the
+uncapped shift energy.
 
-Participant caps are applied once per `lga_segment` population and model
-scenario, excluding `fc_object_id`.
+## Missing coverage
 
-This assumes the same `lga_segment` population should not be counted again just
-because it appears under multiple network objects. The capped amount is
-allocated back to each `fc_object_id` by its share of uncapped shift energy.
+Missing metrics coverage is non-breaking: if a baseline `lga_segment` has no metrics row, its
+output rows are kept, eligibility is treated as zero and `delta_mw` is zero. This protects the
+output shape, but it can hide data-quality problems if callers do not report missing coverage.
+Wrapper notebooks should surface it as an operational diagnostic.
 
-## Missing Coverage
+## Data quality
 
-Missing metrics coverage is non-breaking.
-
-If a baseline `lga_segment` has no metrics row:
-
-- the output rows are retained
-- eligibility is treated as zero
-- `delta_mw` is zero
-
-This protects output shape, but it can hide data-quality issues if callers do
-not report missing coverage. Wrapper notebooks should surface missing coverage
-as an operational diagnostic.
-
-## Data Quality
-
-The package validates required columns and duplicate model keys, but it does
-not prove that source data is semantically correct.
-
-Callers should still check:
+The package validates required columns and duplicate model keys, but it does not prove that source
+data is semantically correct. Callers should still check:
 
 - source row counts
 - null rates in key columns
@@ -113,31 +90,18 @@ Callers should still check:
 - baseline demand ranges
 - duplicate source records before aggregation
 
-## Interpretation Limits
+## Interpretation limits
 
-PyNTLP estimates load-profile impacts under stated assumptions. It does not
-decide:
+PyNTLP estimates load-profile impacts under stated assumptions. It does not decide whether a tariff
+should be adopted, whether it is fair, whether the uptake assumptions are realistic, whether the
+result is commercially optimal, or whether the modelled outcome will occur in practice. Those
+questions need policy, regulatory, customer and commercial analysis outside this package.
 
-- whether a tariff should be adopted
-- whether a tariff is fair
-- whether customer uptake assumptions are realistic
-- whether the result is commercially optimal
-- whether the modelled outcome will occur in practice
+## Extension direction
 
-Those questions require policy, regulatory, customer, and commercial analysis
-outside this package.
+Future tariff structures may need additional public compute functions, tariff-specific parameter
+sections, non-flat allocation shapes, optional rebound modelling, export-side profile impacts,
+stronger scenario metadata and richer validation reports. When extending the package, keep the
+public contracts explicit and document which assumptions are tariff-specific and which are shared.
 
-## Extension Direction
-
-Future tariff structures may need:
-
-- additional public compute functions
-- tariff-specific parameter sections
-- non-flat allocation shapes
-- optional rebound modelling
-- export-side profile impacts
-- stronger scenario metadata
-- richer validation reports
-
-When extending the package, keep the public contracts explicit and document
-which assumptions are tariff-specific versus shared across tariff models.
+///

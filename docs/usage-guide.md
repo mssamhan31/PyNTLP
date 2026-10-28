@@ -1,50 +1,56 @@
-# Usage Guide
+# Usage guide
 
-## Executive Summary
+`pyntlp` is called from another Python job, notebook or pipeline. The caller has already prepared
+normalised Spark DataFrames with the column names the package requires; the package does not read
+production tables.
 
-This guide shows how to use `pyntlp` from another Python job, notebook, or
-pipeline. It assumes the caller has already prepared normalised input data with
-the column names required by the package.
-
-The usual workflow is:
-
-1. Load model parameters.
-2. Build eligibility metrics by `lga_segment`.
-3. Compute PMA SSO deltas from the baseline profile.
-4. Validate the output.
-5. Join or add the deltas back to the baseline outside the package.
-
-`pyntlp` does not read production tables directly. The caller is responsible for
-data access, source column mapping, and writing outputs.
-
-## Prerequisites
-
-Install the package locally:
-
-```bash
-pip install -e .[dev]
-```
-
-In code, import the public API:
+## Six steps
 
 ```python
-from pyntlp import (
-    build_lga_segment_metrics,
-    compute_pma_sso,
-    load_params,
-    validate_pma,
+from pyspark.sql import functions as F
+from pyntlp import (build_lga_segment_metrics, compute_pma_sso,
+                    load_params, validate_pma)
+
+# 1. Parameters: start from the shipped template, src/pyntlp/resources/pyntlp_template.yaml
+params = load_params("params.yaml")
+
+# 2. Inputs: three normalised Spark DataFrames (columns under Show details below)
+#    baseline_profiles_df, lga_segment_attributes_df, smart_meter_df
+
+# 3. One eligibility row per lga_segment
+lga_segment_metrics_df = build_lga_segment_metrics(lga_segment_attributes_df, smart_meter_df, params)
+
+# 4. Additive interval deltas, delta_mw
+pma_delta_df = compute_pma_sso(baseline_profiles_df, lga_segment_metrics_df, params)
+
+# 5. Validate before anything else touches the output
+validation_report_df = validate_pma(pma_delta_df, params)
+validation_report_df.filter("status = 'fail'").show(truncate=False)
+
+# 6. Add the deltas to the baseline, outside the package
+keys = ["fc_object_id", "lga_segment", "customer_type", "fcy", "forecast_scenario", "season",
+        "day_type", "representative_day", "coincident_type", "poe", "interval"]
+post_sso_df = (
+    baseline_profiles_df.join(pma_delta_df, on=keys, how="left")
+    .fillna({"delta_mw": 0.0})
+    .withColumn("post_sso_demand_mw", F.col("baseline_demand_mw") + F.col("delta_mw"))
 )
 ```
 
-## Step 1: Load Parameters
+## Set the window to the tariff's hours
 
-Parameters can come from a YAML file:
+The free window is a parameter, not a constant. The shipped template sets `window_start: "10:00"`
+and `window_end: "15:00"`, with a donor window of 16:00 to 20:00. For the Solar Sharer Offer in New
+South Wales, which includes Ausgrid's area, the free hours are 11:00 to 14:00, so set
+`window_start: "11:00"` and `window_end: "14:00"`. Windows are start-inclusive, end-exclusive and
+must align to `interval_minutes`.
 
-```python
-params = load_params("params.yaml")
-```
+/// details | Show details
+    type: more
 
-They can also come from a Python dictionary, which is useful in tests:
+## Parameters as a dictionary
+
+Parameters can come from a YAML file or from a Python dictionary, which is useful in tests:
 
 ```python
 params = load_params(
@@ -79,184 +85,63 @@ params = load_params(
 )
 ```
 
-Use the shipped template as the starting point for a YAML file:
+The values above are the template's illustrative defaults, not calibrated estimates.
 
-```text
-src/pyntlp/resources/pyntlp_template.yaml
-```
+## Input columns
 
-## Step 2: Prepare Input Data
+Baseline profile columns: `fc_object_id`, `lga_segment`, `customer_type`, `fcy`,
+`forecast_scenario`, `season`, `day_type`, `representative_day`, `coincident_type`, `poe`,
+`interval`, `baseline_demand_mw`.
 
-The package expects normalised Spark DataFrames. If your source system uses
-different column names, rename them before calling the package.
+LGA segment attribute columns: `nmi`, `lga_segment`.
 
-Baseline profile columns:
+Smart-meter attribute columns: `nmi`, `meter_type_code`.
 
-- `fc_object_id`
-- `lga_segment`
-- `customer_type`
-- `fcy`
-- `forecast_scenario`
-- `season`
-- `day_type`
-- `representative_day`
-- `coincident_type`
-- `poe`
-- `interval`
-- `baseline_demand_mw`
-
-LGA segment attribute columns:
-
-- `nmi`
-- `lga_segment`
-
-Smart-meter attribute columns:
-
-- `nmi`
-- `meter_type_code`
-
-Example source mapping:
+If the source system uses different column names, rename them before calling the package:
 
 ```python
 baseline_profiles_df = raw_baseline_df.select(
-    "fc_object_id",
-    "lga_segment",
-    "customer_type",
-    "fcy",
-    "forecast_scenario",
-    "season",
-    "day_type",
-    "representative_day",
-    "coincident_type",
-    "poe",
-    "interval",
-    "baseline_demand_mw",
+    "fc_object_id", "lga_segment", "customer_type", "fcy", "forecast_scenario", "season",
+    "day_type", "representative_day", "coincident_type", "poe", "interval", "baseline_demand_mw",
 )
-
-lga_segment_attributes_df = raw_nmi_df.select(
-    "nmi",
-    "lga_segment",
-)
-
-smart_meter_df = raw_meter_df.select(
-    "nmi",
-    "meter_type_code",
-)
+lga_segment_attributes_df = raw_nmi_df.select("nmi", "lga_segment")
+smart_meter_df = raw_meter_df.select("nmi", "meter_type_code")
 ```
 
-## Step 3: Build Eligibility Metrics
+## Checking the eligibility metrics
 
-Build one metrics row per `lga_segment`:
+Useful columns to inspect after step 3: `n_total`, `n_eligible`, `eligibility_rate`,
+`eligibility_rate_no_der`, `eligibility_rate_solar`, `eligibility_rate_solar_battery`.
 
-```python
-lga_segment_metrics_df = build_lga_segment_metrics(
-    lga_segment_attributes_df=lga_segment_attributes_df,
-    smart_meter_df=smart_meter_df,
-    params=params,
-)
-```
-
-Useful columns to inspect:
-
-- `n_total`
-- `n_eligible`
-- `eligibility_rate`
-- `eligibility_rate_no_der`
-- `eligibility_rate_solar`
-- `eligibility_rate_solar_battery`
-
-If these values look wrong, check:
+If they look wrong, check:
 
 - whether `lga_segment` strings contain the expected residential labels
 - whether `lga_segment` strings end with supported DER suffixes
 - whether `meter_type_code` values match `smart_meter_code`
 - whether an NMI appears under multiple DER groups
 
-## Step 4: Compute SSO Deltas
+## What the deltas contain
 
-Compute additive interval deltas:
+The result of step 4 holds the baseline dimensions, `customer_type` carried through as an
+attribute, `interval` and `delta_mw`. `delta_mw` is meant to be added to the baseline; it is never
+a new profile on its own.
 
-```python
-pma_delta_df = compute_pma_sso(
-    baseline_profiles_df=baseline_profiles_df,
-    lga_segment_metrics_df=lga_segment_metrics_df,
-    params=params,
-)
-```
+Validation in step 5 checks the exact output schema and column order, missing or extra columns,
+non-null requirements, and grouped energy neutrality.
 
-The result contains:
+## Operational checks around the package
 
-- the baseline dimensions
-- `customer_type`, carried through as an attribute
-- `interval`
-- `delta_mw`
-
-`delta_mw` is meant to be added to the baseline:
-
-```text
-post_sso_demand_mw = baseline_demand_mw + delta_mw
-```
-
-## Step 5: Validate The Output
-
-Run package validation:
-
-```python
-validation_report_df = validate_pma(pma_delta_df, params)
-```
-
-Inspect failed checks:
-
-```python
-validation_report_df.filter("status = 'fail'").show(truncate=False)
-```
-
-Current validation checks include:
-
-- exact output schema and column order
-- missing or extra output columns
-- non-null requirements
-- grouped energy neutrality
-
-## Step 6: Combine With The Baseline
-
-Joining deltas back to the baseline is a caller responsibility:
-
-```python
-post_sso_df = (
-    baseline_profiles_df.join(
-        pma_delta_df,
-        on=[
-            "fc_object_id",
-            "lga_segment",
-            "customer_type",
-            "fcy",
-            "forecast_scenario",
-            "season",
-            "day_type",
-            "representative_day",
-            "coincident_type",
-            "poe",
-            "interval",
-        ],
-        how="left",
-    )
-    .fillna({"delta_mw": 0.0})
-    .withColumn("post_sso_demand_mw", F.col("baseline_demand_mw") + F.col("delta_mw"))
-)
-```
-
-## Recommended Operational Checks
-
-Wrappers and notebooks should add operational checks around the package:
+Wrappers and notebooks should add their own checks:
 
 - row counts before and after source mapping
-- missing baseline `lga_segment` coverage in metrics
+- missing baseline `lga_segment` coverage in the metrics
 - duplicate source keys before calling `compute_pma_sso(...)`
-- number of non-zero delta rows
-- largest positive and negative `delta_mw`
+- the number of non-zero delta rows
+- the largest positive and negative `delta_mw`
 - validation report failures
 - energy-neutrality summaries by forecast scenario and segment
 
-These checks are intentionally outside the package because different projects
-may want to fail, warn, or report them differently.
+These checks sit outside the package because different projects fail, warn or report them
+differently.
+
+///

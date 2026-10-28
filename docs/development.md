@@ -1,144 +1,97 @@
-# Development Notes
+# Development
 
-## Executive Summary
+Package code stays reusable, Spark-native and table-agnostic. Databricks notebooks, source table
+names, widgets, dashboard writes and environment-specific orchestration belong outside the package.
 
-This page explains how to work on `pyntlp` locally without changing its public
-contract accidentally.
+## Environment
 
-The development rule of thumb is simple: package code should stay reusable,
-Spark-native, and table-agnostic. Databricks notebooks, source table names,
-widgets, dashboard writes, and environment-specific orchestration belong outside
-the package.
+Python 3.12 and PySpark 4.x; Spark-backed tests need Java 17.
 
-## Runtime Targets
-
-The package targets:
-
-- Python `3.12`
-- PySpark `4.x`
-
-Spark-backed tests require Java because PySpark starts a local JVM. Pure-Python
-tests can still run without Java.
-
-## Local Setup
-
-From the repository root:
-
-```bash
-pip install -e .[dev]
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -e .[dev]
 ```
 
-This installs:
+## Verification
 
-- the package in editable mode
-- `pytest` for the test suite
-- runtime dependencies including `PyYAML` and `pyspark`
-
-Editable install is useful because local source edits are immediately visible to
-test runs and notebook wrappers that import the local package.
-
-## Verification Commands
-
-Run the full test suite:
-
-```bash
+```powershell
 python -m pytest
-```
-
-Check Python syntax for package modules:
-
-```bash
 python -m compileall src tests
-```
-
-Check whitespace and patch hygiene before committing:
-
-```bash
 git diff --check
 ```
 
-Use all three commands for behaviour changes. For Markdown-only changes,
-`git diff --check` is usually enough unless the documentation change is tied to
-an unverified code change.
+Use all three for behaviour changes. For Markdown-only changes, `git diff --check` and
+`mkdocs build --strict` are enough.
 
-## Test Coverage
+/// details | Show details
+    type: more
 
-The tests cover:
+## What the editable install gives you
 
-- import smoke checks
-- parameter loading and validation
-- interval and window boundary logic
-- `lga_segment` eligibility metrics
-- duplicate baseline-key detection
-- missing metrics coverage producing zero deltas
-- participant-cap behaviour across one or more `fc_object_id` values
-- model energy neutrality
-- a small end-to-end Spark flow
+The package in editable mode, so local source edits are immediately visible to tests and notebook
+wrappers; `pytest`; and the runtime dependencies, including `PyYAML` and `pyspark`.
 
-When changing model logic, add or update tests at the same grain as the changed
-behaviour. For example, cap changes should be tested across multiple
-`fc_object_id` values that share a `lga_segment`, because that is where
-over-counting risk appears.
+## Test coverage
 
-## Spark Test Requirement
+The tests cover import smoke checks, parameter loading and validation, interval and window boundary
+logic, `lga_segment` eligibility metrics, duplicate baseline-key detection, missing metrics
+coverage producing zero deltas, participant-cap behaviour across one or more `fc_object_id` values,
+model energy neutrality, and a small end-to-end Spark flow.
 
-Spark-backed tests need a working Java runtime in the local environment.
+When changing model logic, add or update tests at the same grain as the changed behaviour. Cap
+changes, for example, should be tested across several `fc_object_id` values that share an
+`lga_segment`, because that is where over-counting risk appears.
 
-If Java is not available:
+## Spark tests need Java
 
-- pure-Python tests still run
-- Spark tests are skipped
-
-This is expected behaviour on machines without `JAVA_HOME` or `java` on the
-path. A skipped Spark test is not the same as a passed Spark test, so any logic
-change that depends on Spark transformations should eventually be run in an
+PySpark starts a local JVM. Without Java, pure-Python tests still run and Spark tests are skipped;
+that is expected on machines without `JAVA_HOME` or `java` on the path. A skipped Spark test is not
+a passed one, so any change that depends on Spark transformations must eventually run in an
 environment with Java.
 
 ## Packaging
 
-The package uses `setuptools` with `pyproject.toml`.
+The package uses `setuptools` with `pyproject.toml`: a `src/` layout, the package name `pyntlp`,
+YAML resources shipped from `src/pyntlp/resources/`, and public exports controlled through
+`src/pyntlp/__init__.py`. Keep package resources small and generic; production configuration
+files, secrets, table names and one-off notebooks do not belong in the resource directory.
 
-Important packaging details:
+## Documentation
 
-- source layout uses `src/`
-- package name is `pyntlp`
-- YAML resources are shipped from `src/pyntlp/resources/`
-- public exports are controlled through `src/pyntlp/__init__.py`
+```powershell
+python -m pip install "mkdocs<2" "mkdocs-material<10"
+mkdocs serve -a 127.0.0.1:8000     # local preview at http://127.0.0.1:8000/PyNTLP/
+mkdocs build --strict
+```
 
-Keep package resources small and generic. Production configuration files,
-secrets, table names, and one-off notebooks should not be added to the package
-resource directory.
+`docs-pages.yml` builds the site on every pull request to `main` and publishes it to GitHub Pages
+at <https://mssamhan31.github.io/PyNTLP/> when `main` changes. It installs only MkDocs and the
+Material theme, not the package, so the build never pulls in pyspark.
 
-## Documentation Expectations
+The Home page (`docs/index.md`) is written for a general reader as raw HTML; its styles live in
+`docs/assets/css/site.css`. Every documentation page shows what an analyst running the package needs
+first and puts the rest in one `/// details | Show details` block (type `more`) at its foot. Pages
+left out of the menu are listed under `not_in_nav` in `mkdocs.yml` and reached from the Overview's
+full page list.
 
-When public behaviour changes, update:
+When public behaviour changes, update the top-level `README.md`, the relevant `docs/` page, the
+tests that cover the change, and `CHANGELOG.md` if the change is release-facing. Documentation
+should say what a part of the model does, what inputs it expects, what output grain it returns,
+which assumptions affect the result and what to inspect when debugging. Keep it public-facing and
+generic: organisation-specific notebooks, tables, catalogs, deployment instructions and dashboard
+targets belong in the wrapper repository or deployment documentation.
 
-- the top-level `README.md`
-- the relevant `docs/` page
-- tests that cover the changed behaviour
-- `CHANGELOG.md` if the change is release-facing
+## Review checklist
 
-Documentation should explain:
+Before treating a change as ready, check that:
 
-- what the section of the model does
-- what inputs it expects
-- what output grain it returns
-- which assumptions affect the result
-- what to inspect when debugging
-
-Keep documentation public-facing and generic. Organisation-specific notebooks,
-tables, catalogs, deployment instructions, and dashboard targets belong in the
-wrapper repository or deployment documentation, not in `pyntlp`.
-
-## Review Checklist
-
-Before treating a change as ready, check:
-
-- public function signatures are unchanged unless the release explicitly allows
-  a breaking change
-- output column order still matches the public contract
+- public function signatures are unchanged, unless the release explicitly allows a breaking change
+- the output column order still matches the public contract
 - `customer_type` remains a carried attribute, not a model dimension
 - cap logic still applies once per `lga_segment` population grain
-- missing metrics coverage still preserves output rows with zero deltas
+- missing metrics coverage still keeps output rows with zero deltas
 - validation still reports energy-neutrality failures
-- docs and tests describe the same behaviour
+- the documentation and the tests describe the same behaviour
+
+///
