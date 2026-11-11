@@ -20,6 +20,11 @@ Python 3.12, PySpark 4.x, and Java 17 for Spark. The package is installed from G
 python -m pip install "pyntlp @ git+https://github.com/mssamhan31/PyNTLP@v0.2.0"
 ```
 
+That command contacts GitHub every time an environment is created. Where results must be
+reproducible, build one wheel from a release and install only that file; see
+[Locking a release for reproducible runs](#locking-a-release-for-reproducible-runs) under Show
+details.
+
 ## Four calls
 
 ```python
@@ -37,6 +42,65 @@ explains what the model computes.
 
 /// details | Show details
     type: more
+
+## Locking a release for reproducible runs
+
+Installing from the GitHub address fetches the repository each time, so a run depends on GitHub
+being reachable and on the reference still pointing at the same commit. A branch name such as
+`dev` moves, and its version string does not identify a commit. To fix the code a deployment runs,
+fetch a release once, build a wheel from it, and from then on install only that file from storage
+you control.
+
+**Build the wheel once**, with Python 3.12, from a release tag:
+
+```powershell
+git clone --depth 1 --branch v0.2.0 https://github.com/mssamhan31/PyNTLP.git pyntlp-v0.2.0
+cd pyntlp-v0.2.0
+python -m pip install build
+python -m build --wheel
+Get-FileHash dist\pyntlp-0.2.0-py3-none-any.whl -Algorithm SHA256
+```
+
+Record the SHA-256 beside the tag it was built from. The wheel carries the time it was built, so
+building it again gives a different hash for the same code: keep the file you built and never
+rebuild it in place.
+
+**Store the wheel** where the runtime can read it, such as an internal package index or, on
+Databricks, a Unity Catalog volume. Keep the file name unchanged, because pip reads the version
+from it.
+
+**Install from the file, without dependencies.** In a Databricks notebook:
+
+```text
+%pip install --no-deps /Volumes/<catalog>/<schema>/<volume>/pyntlp-0.2.0-py3-none-any.whl
+```
+
+Anywhere else:
+
+```powershell
+python -m pip install --no-deps <folder>\pyntlp-0.2.0-py3-none-any.whl
+```
+
+`--no-deps` matters on a managed Spark runtime. The wheel declares `pyspark>=4.0,<5.0` and
+`PyYAML>=6.0,<7.0`; without the flag pip may download PySpark from the public index on top of the
+runtime's own copy, and the install is no longer served from your storage alone. With the flag,
+the runtime has to supply Python 3.12, Spark 4.x and PyYAML 6.x itself. Databricks Runtime 17.3
+LTS does.
+
+**Check what is installed** at the top of the job, so the version is written into the run's log:
+
+```python
+from importlib.metadata import version
+
+print(version("pyntlp"))  # 0.2.0
+```
+
+**Lock the parameters as well.** The wheel fixes the code, not the assumptions. Uptake, shiftable
+share, response, the participant cap and both windows live in the caller's parameter file, so keep
+that file under version control and record it with the wheel's hash against each run.
+
+To move to a newer release, build a second wheel from the newer tag, store it beside the first and
+change the install line. Do not overwrite a stored wheel.
 
 ## Where things are
 
